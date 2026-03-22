@@ -2,6 +2,6 @@
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "npx serve -s build -l 8080"
+startCommand = "npx serve -s build -l $PORT"
 healthcheckPath = "/"
 healthcheckTimeout = 100
