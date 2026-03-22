@@ -1,0 +1,7 @@
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 100
+startCommand = "caddy run --config /Caddyfile --adapter caddyfile"
+
+[[services]]
+port = 8080
