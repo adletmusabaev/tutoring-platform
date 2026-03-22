@@ -1,7 +1,7 @@
+[build]
+buildCommand = "npm run build"
+
 [deploy]
+startCommand = "npx serve -s build -l ${PORT:-8080}"
 healthcheckPath = "/"
 healthcheckTimeout = 100
-startCommand = "caddy run --config /Caddyfile --adapter caddyfile"
-
-[[services]]
-port = 8080
