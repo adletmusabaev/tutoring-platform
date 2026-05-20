@@ -5,6 +5,19 @@ import { useSocket } from '../hooks/useSocket';
 import * as chatService from '../services/chatService';
 
 const API_ORIGIN = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+const DEFAULT_ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+const getIceServers = () => {
+  if (!process.env.REACT_APP_ICE_SERVERS) {
+    return DEFAULT_ICE_SERVERS;
+  }
+
+  try {
+    return JSON.parse(process.env.REACT_APP_ICE_SERVERS);
+  } catch (err) {
+    return DEFAULT_ICE_SERVERS;
+  }
+};
 
 function ChatPage() {
   const { bookingId } = useParams();
@@ -24,17 +37,49 @@ function ChatPage() {
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
   const [remoteConnected, setRemoteConnected] = useState(false);
+  const [incomingOffer, setIncomingOffer] = useState(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
+  const pendingIceCandidatesRef = useRef([]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const otherUser = user.role === 'student' ? chat?.teacherId : chat?.studentId;
+
+  const playVideo = (videoElement) => {
+    const playPromise = videoElement?.play?.();
+    if (playPromise?.catch) {
+      playPromise.catch(() => {});
+    }
   };
+
+  const attachLocalStream = useCallback((stream = localStreamRef.current) => {
+    if (localVideoRef.current && stream) {
+      localVideoRef.current.srcObject = stream;
+      playVideo(localVideoRef.current);
+    }
+  }, []);
+
+  const attachRemoteStream = useCallback((stream = remoteStreamRef.current) => {
+    if (remoteVideoRef.current && stream) {
+      remoteVideoRef.current.srcObject = stream;
+      playVideo(remoteVideoRef.current);
+    }
+  }, []);
+
+  const setLocalVideoElement = useCallback((node) => {
+    localVideoRef.current = node;
+    attachLocalStream(screenStreamRef.current || localStreamRef.current);
+  }, [attachLocalStream]);
+
+  const setRemoteVideoElement = useCallback((node) => {
+    remoteVideoRef.current = node;
+    attachRemoteStream();
+  }, [attachRemoteStream]);
 
   const normalizeMessage = useCallback((data) => ({
     senderId: data.userId || data.senderId,
@@ -63,7 +108,7 @@ function ChatPage() {
   }, [fetchChat]);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const cleanupCall = useCallback((notifyPeer = false) => {
@@ -73,11 +118,13 @@ function ChatPage() {
 
     peerConnectionRef.current?.close();
     peerConnectionRef.current = null;
-
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+
     localStreamRef.current = null;
+    remoteStreamRef.current = null;
     screenStreamRef.current = null;
+    pendingIceCandidatesRef.current = [];
 
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = null;
@@ -87,6 +134,7 @@ function ChatPage() {
     }
 
     setCallOpen(false);
+    setIncomingOffer(null);
     setCallStatus('Звонок завершен');
     setMicEnabled(true);
     setCameraEnabled(true);
@@ -104,12 +152,22 @@ function ChatPage() {
       video: true
     });
     localStreamRef.current = stream;
+    attachLocalStream(stream);
+    return stream;
+  }, [attachLocalStream]);
 
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
+  const drainPendingIceCandidates = useCallback(async () => {
+    const peerConnection = peerConnectionRef.current;
+    if (!peerConnection?.remoteDescription) {
+      return;
     }
 
-    return stream;
+    const candidates = pendingIceCandidatesRef.current;
+    pendingIceCandidatesRef.current = [];
+
+    for (const candidate of candidates) {
+      await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    }
   }, []);
 
   const createPeerConnection = useCallback(() => {
@@ -118,7 +176,7 @@ function ChatPage() {
     }
 
     const peerConnection = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: getIceServers()
     });
 
     peerConnection.onicecandidate = (event) => {
@@ -131,16 +189,17 @@ function ChatPage() {
     };
 
     peerConnection.ontrack = (event) => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-      }
+      remoteStreamRef.current = event.streams[0];
+      attachRemoteStream(event.streams[0]);
       setRemoteConnected(true);
     };
 
     peerConnection.onconnectionstatechange = () => {
       if (peerConnection.connectionState === 'connected') {
         setCallStatus('Вы в звонке');
+        setRemoteConnected(true);
       }
+
       if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState)) {
         setRemoteConnected(false);
       }
@@ -148,7 +207,7 @@ function ChatPage() {
 
     peerConnectionRef.current = peerConnection;
     return peerConnection;
-  }, [bookingId, socket]);
+  }, [attachRemoteStream, bookingId, socket]);
 
   const addLocalTracks = useCallback(async (peerConnection) => {
     const stream = await getLocalStream();
@@ -163,6 +222,7 @@ function ChatPage() {
   const startCall = async () => {
     try {
       setError('');
+      setIncomingOffer(null);
       setCallOpen(true);
       setCallStatus('Идет вызов...');
       const peerConnection = createPeerConnection();
@@ -184,6 +244,7 @@ function ChatPage() {
       const peerConnection = createPeerConnection();
       await addLocalTracks(peerConnection);
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      await drainPendingIceCandidates();
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
       socket.emit('call-answer', { bookingId, answer });
@@ -191,7 +252,7 @@ function ChatPage() {
       setError('Не удалось принять звонок. Проверьте доступ к камере и микрофону.');
       cleanupCall(false);
     }
-  }, [addLocalTracks, bookingId, cleanupCall, createPeerConnection, socket]);
+  }, [addLocalTracks, bookingId, cleanupCall, createPeerConnection, drainPendingIceCandidates, socket]);
 
   useEffect(() => {
     if (!socket || !connected || !bookingId) {
@@ -211,20 +272,31 @@ function ChatPage() {
     };
 
     const handleCallOffer = ({ offer }) => {
-      answerCall(offer);
+      setIncomingOffer(offer);
+      setCallStatus('Входящий звонок');
     };
 
     const handleCallAnswer = async ({ answer }) => {
-      if (peerConnectionRef.current) {
-        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-        setCallStatus('Вы в звонке');
+      if (!peerConnectionRef.current) {
+        return;
       }
+
+      await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+      await drainPendingIceCandidates();
+      setCallStatus('Вы в звонке');
     };
 
     const handleIceCandidate = async ({ candidate }) => {
-      if (peerConnectionRef.current && candidate) {
-        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      if (!candidate) {
+        return;
       }
+
+      if (peerConnectionRef.current?.remoteDescription) {
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        return;
+      }
+
+      pendingIceCandidatesRef.current.push(candidate);
     };
 
     socket.on('receive-message', handleReceiveMessage);
@@ -247,9 +319,24 @@ function ChatPage() {
       socket.off('end-call');
       socket.off('error');
     };
-  }, [answerCall, bookingId, cleanupCall, connected, normalizeMessage, socket]);
+  }, [bookingId, cleanupCall, connected, drainPendingIceCandidates, normalizeMessage, socket]);
 
   useEffect(() => () => cleanupCall(false), [cleanupCall]);
+
+  const acceptIncomingCall = async () => {
+    if (!incomingOffer) {
+      return;
+    }
+
+    const offer = incomingOffer;
+    setIncomingOffer(null);
+    await answerCall(offer);
+  };
+
+  const rejectIncomingCall = () => {
+    setIncomingOffer(null);
+    cleanupCall(true);
+  };
 
   const handleFileChange = (event) => {
     setSelectedFiles(Array.from(event.target.files || []));
@@ -282,7 +369,7 @@ function ChatPage() {
         attachments = uploadResult.files || [];
       }
 
-      const tempMessage = {
+      setMessages((prev) => [...prev, {
         senderId: user.id,
         senderRole: user.role,
         text,
@@ -290,9 +377,8 @@ function ChatPage() {
         messageType: attachments.length > 0 ? (text ? 'mixed' : 'attachment') : 'text',
         timestamp: new Date(),
         _temp: true
-      };
+      }]);
 
-      setMessages((prev) => [...prev, tempMessage]);
       socket.emit('send-message', {
         bookingId,
         userId: user.id,
@@ -338,10 +424,16 @@ function ChatPage() {
       const videoSender = peerConnection?.getSenders().find((sender) => sender.track?.kind === 'video');
       const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
 
+      if (!videoSender || !cameraTrack) {
+        setError('Сначала начните звонок с камерой.');
+        return;
+      }
+
       if (screenSharing) {
-        await videoSender?.replaceTrack(cameraTrack);
+        await videoSender.replaceTrack(cameraTrack);
         screenStreamRef.current?.getTracks().forEach((track) => track.stop());
         screenStreamRef.current = null;
+        attachLocalStream(localStreamRef.current);
         setScreenSharing(false);
         return;
       }
@@ -350,16 +442,12 @@ function ChatPage() {
       const screenTrack = screenStream.getVideoTracks()[0];
       screenStreamRef.current = screenStream;
 
-      await videoSender?.replaceTrack(screenTrack);
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = screenStream;
-      }
+      await videoSender.replaceTrack(screenTrack);
+      attachLocalStream(screenStream);
 
       screenTrack.onended = async () => {
-        await videoSender?.replaceTrack(cameraTrack);
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = localStreamRef.current;
-        }
+        await videoSender.replaceTrack(cameraTrack);
+        attachLocalStream(localStreamRef.current);
         setScreenSharing(false);
       };
 
@@ -420,16 +508,12 @@ function ChatPage() {
     );
   }
 
-  const otherUser = user.role === 'student' ? chat?.teacherId : chat?.studentId;
-
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <div className="bg-white border-b p-4 flex items-center justify-between shadow">
         <div>
           <h1 className="text-2xl font-bold">{otherUser?.name || 'Chat'}</h1>
-          <p className="text-sm text-gray-600">
-            {connected ? 'Online' : 'Offline'}
-          </p>
+          <p className="text-sm text-gray-600">{connected ? 'Online' : 'Offline'}</p>
         </div>
         <button
           type="button"
@@ -440,6 +524,22 @@ function ChatPage() {
           Начать звонок
         </button>
       </div>
+
+      {incomingOffer && !callOpen && (
+        <div className="border-b bg-blue-50 px-4 py-3 text-blue-900">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <span>Входящий звонок от {otherUser?.name || 'собеседника'}</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={acceptIncomingCall} className="btn-primary">
+                Принять
+              </button>
+              <button type="button" onClick={rejectIncomingCall} className="btn-secondary">
+                Отклонить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
@@ -553,7 +653,7 @@ function ChatPage() {
 
             <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-2">
               <div className="relative overflow-hidden rounded-lg bg-black">
-                <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+                <video ref={setRemoteVideoElement} autoPlay playsInline className="h-full w-full object-cover" />
                 {!remoteConnected && (
                   <div className="absolute inset-0 flex items-center justify-center text-gray-300">
                     Ожидание собеседника
@@ -561,7 +661,7 @@ function ChatPage() {
                 )}
               </div>
               <div className="relative overflow-hidden rounded-lg bg-black">
-                <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+                <video ref={setLocalVideoElement} autoPlay muted playsInline className="h-full w-full object-cover" />
                 <div className="absolute bottom-3 left-3 rounded bg-black/60 px-2 py-1 text-sm">
                   {screenSharing ? 'Ваш экран' : 'Вы'}
                 </div>
