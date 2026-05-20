@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useSocket } from '../hooks/useSocket';
 import * as chatService from '../services/chatService';
+
+const API_ORIGIN = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
 function ChatPage() {
   const { bookingId } = useParams();
@@ -11,177 +13,396 @@ function ChatPage() {
   const [chat, setChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [typing, setTyping] = useState(null);
+  const [callOpen, setCallOpen] = useState(false);
+  const [callStatus, setCallStatus] = useState('Звонок не начат');
+  const [micEnabled, setMicEnabled] = useState(true);
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [remoteConnected, setRemoteConnected] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const screenStreamRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    fetchChat();
-  }, [bookingId]);
+  const normalizeMessage = useCallback((data) => ({
+    senderId: data.userId || data.senderId,
+    senderRole: data.userRole || data.senderRole,
+    text: data.message || data.text || '',
+    attachments: data.attachments || [],
+    messageType: data.messageType || 'text',
+    timestamp: data.timestamp || new Date()
+  }), []);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const fetchChat = async () => {
+  const fetchChat = useCallback(async () => {
     try {
       setLoading(true);
       const data = await chatService.getChatByBooking(bookingId);
       setChat(data);
       setMessages(data.messages || []);
-      console.log('✅ Chat loaded, messages count:', (data.messages || []).length);
-      console.log('Messages:', data.messages);
     } catch (err) {
-      console.error('❌ Failed to load chat:', err);
-      setError('Failed to load chat');
+      setError(err?.error || 'Не удалось загрузить чат');
     } finally {
       setLoading(false);
     }
-  };
+  }, [bookingId]);
 
   useEffect(() => {
-    if (socket && connected && bookingId) {
-      console.log('📍 Joining chat room:', bookingId);
-      socket.emit('join-chat', bookingId);
+    fetchChat();
+  }, [fetchChat]);
 
-      socket.on('receive-message', (data) => {
-  console.log('💬 Message received from socket:', data);
-  setMessages(prev => {
-    // Проверяем, есть ли уже это сообщение (чтобы избежать дубликатов)
-    const exists = prev.some(msg => 
-      msg.text === data.message && 
-      msg.senderId === data.userId &&
-      Math.abs(new Date(msg.timestamp) - new Date(data.timestamp)) < 1000
-    );
-    
-    if (exists) {
-      // Заменяем временное сообщение на подтверждённое
-      return prev.map(msg => {
-        if (msg._temp && msg.text === data.message && msg.senderId === data.userId) {
-          return {
-            senderId: data.userId,
-            senderRole: data.userRole,
-            text: data.message,
-            timestamp: data.timestamp
-          };
-        }
-        return msg;
-      });
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const cleanupCall = useCallback((notifyPeer = false) => {
+    if (notifyPeer && socket && bookingId) {
+      socket.emit('end-call', bookingId);
     }
-    
-    // Если не существует, добавляем новое
-    return [...prev, {
-      senderId: data.userId,
-      senderRole: data.userRole,
-      text: data.message,
-      timestamp: data.timestamp
-    }];
-  });
-});
 
-      socket.on('user-typing', (data) => {
-        console.log('⌨️ User typing:', data);
-        setTyping(data.socketId);
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setTyping(null), 3000);
-      });
+    peerConnectionRef.current?.close();
+    peerConnectionRef.current = null;
 
-      socket.on('user-stop-typing', () => {
-        setTyping(null);
-      });
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current = null;
+    screenStreamRef.current = null;
 
-      socket.on('error', (data) => {
-        console.error('❌ Socket error:', data);
-        setError(data.error || 'Socket error');
-      });
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
 
-      socket.on('connect_error', (error) => {
-        console.error('❌ Connection error:', error);
-      });
+    setCallOpen(false);
+    setCallStatus('Звонок завершен');
+    setMicEnabled(true);
+    setCameraEnabled(true);
+    setScreenSharing(false);
+    setRemoteConnected(false);
+  }, [bookingId, socket]);
 
-      return () => {
-        console.log('📍 Leaving chat room:', bookingId);
-        socket.emit('leave-chat', bookingId);
-        socket.off('receive-message');
-        socket.off('user-typing');
-        socket.off('user-stop-typing');
-        socket.off('error');
-        socket.off('connect_error');
+  const getLocalStream = useCallback(async () => {
+    if (localStreamRef.current) {
+      return localStreamRef.current;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true
+    });
+    localStreamRef.current = stream;
+
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+    }
+
+    return stream;
+  }, []);
+
+  const createPeerConnection = useCallback(() => {
+    if (peerConnectionRef.current) {
+      return peerConnectionRef.current;
+    }
+
+    const peerConnection = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate && socket) {
+        socket.emit('ice-candidate', {
+          bookingId,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    peerConnection.ontrack = (event) => {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
+      setRemoteConnected(true);
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+      if (peerConnection.connectionState === 'connected') {
+        setCallStatus('Вы в звонке');
+      }
+      if (['disconnected', 'failed', 'closed'].includes(peerConnection.connectionState)) {
+        setRemoteConnected(false);
+      }
+    };
+
+    peerConnectionRef.current = peerConnection;
+    return peerConnection;
+  }, [bookingId, socket]);
+
+  const addLocalTracks = useCallback(async (peerConnection) => {
+    const stream = await getLocalStream();
+    stream.getTracks().forEach((track) => {
+      const alreadyAdded = peerConnection.getSenders().some((sender) => sender.track === track);
+      if (!alreadyAdded) {
+        peerConnection.addTrack(track, stream);
+      }
+    });
+  }, [getLocalStream]);
+
+  const startCall = async () => {
+    try {
+      setError('');
+      setCallOpen(true);
+      setCallStatus('Идет вызов...');
+      const peerConnection = createPeerConnection();
+      await addLocalTracks(peerConnection);
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      socket.emit('call-offer', { bookingId, offer });
+    } catch (err) {
+      setError('Не удалось начать звонок. Проверьте доступ к камере и микрофону.');
+      cleanupCall(false);
+    }
+  };
+
+  const answerCall = useCallback(async (offer) => {
+    try {
+      setError('');
+      setCallOpen(true);
+      setCallStatus('Подключение к звонку...');
+      const peerConnection = createPeerConnection();
+      await addLocalTracks(peerConnection);
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('call-answer', { bookingId, answer });
+    } catch (err) {
+      setError('Не удалось принять звонок. Проверьте доступ к камере и микрофону.');
+      cleanupCall(false);
+    }
+  }, [addLocalTracks, bookingId, cleanupCall, createPeerConnection, socket]);
+
+  useEffect(() => {
+    if (!socket || !connected || !bookingId) {
+      return undefined;
+    }
+
+    socket.emit('join-chat', bookingId);
+
+    const handleReceiveMessage = (data) => {
+      setMessages((prev) => [...prev.filter((msg) => !msg._temp), normalizeMessage(data)]);
+    };
+
+    const handleTypingEvent = (data) => {
+      setTyping(data.socketId);
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => setTyping(null), 3000);
+    };
+
+    const handleCallOffer = ({ offer }) => {
+      answerCall(offer);
+    };
+
+    const handleCallAnswer = async ({ answer }) => {
+      if (peerConnectionRef.current) {
+        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+        setCallStatus('Вы в звонке');
+      }
+    };
+
+    const handleIceCandidate = async ({ candidate }) => {
+      if (peerConnectionRef.current && candidate) {
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    };
+
+    socket.on('receive-message', handleReceiveMessage);
+    socket.on('user-typing', handleTypingEvent);
+    socket.on('user-stop-typing', () => setTyping(null));
+    socket.on('call-offer', handleCallOffer);
+    socket.on('call-answer', handleCallAnswer);
+    socket.on('ice-candidate', handleIceCandidate);
+    socket.on('end-call', () => cleanupCall(false));
+    socket.on('error', (data) => setError(data.error || 'Ошибка соединения'));
+
+    return () => {
+      socket.emit('leave-chat', bookingId);
+      socket.off('receive-message', handleReceiveMessage);
+      socket.off('user-typing', handleTypingEvent);
+      socket.off('user-stop-typing');
+      socket.off('call-offer', handleCallOffer);
+      socket.off('call-answer', handleCallAnswer);
+      socket.off('ice-candidate', handleIceCandidate);
+      socket.off('end-call');
+      socket.off('error');
+    };
+  }, [answerCall, bookingId, cleanupCall, connected, normalizeMessage, socket]);
+
+  useEffect(() => () => cleanupCall(false), [cleanupCall]);
+
+  const handleFileChange = (event) => {
+    setSelectedFiles(Array.from(event.target.files || []));
+  };
+
+  const removeSelectedFile = (fileName) => {
+    setSelectedFiles((prev) => prev.filter((file) => file.name !== fileName));
+  };
+
+  const handleSendMessage = async (event) => {
+    event.preventDefault();
+
+    const text = messageText.trim();
+    if (!text && selectedFiles.length === 0) {
+      return;
+    }
+
+    if (!socket || !connected) {
+      setError('Нет подключения к серверу чата');
+      return;
+    }
+
+    try {
+      setSending(true);
+      setError('');
+      let attachments = [];
+
+      if (selectedFiles.length > 0) {
+        const uploadResult = await chatService.uploadChatFiles(bookingId, selectedFiles);
+        attachments = uploadResult.files || [];
+      }
+
+      const tempMessage = {
+        senderId: user.id,
+        senderRole: user.role,
+        text,
+        attachments,
+        messageType: attachments.length > 0 ? (text ? 'mixed' : 'attachment') : 'text',
+        timestamp: new Date(),
+        _temp: true
       };
+
+      setMessages((prev) => [...prev, tempMessage]);
+      socket.emit('send-message', {
+        bookingId,
+        userId: user.id,
+        userRole: user.role,
+        message: text,
+        attachments
+      });
+
+      setMessageText('');
+      setSelectedFiles([]);
+    } catch (err) {
+      setError(err?.error || 'Не удалось отправить файл или сообщение');
+    } finally {
+      setSending(false);
     }
-  }, [socket, connected, bookingId]);
-
-  const handleSendMessage = (e) => {
-  e.preventDefault();
-
-  console.log('🔴 handleSendMessage called');
-  console.log('🔴 messageText:', messageText);
-  console.log('🔴 socket:', socket);
-  console.log('🔴 connected:', connected);
-  console.log('🔴 bookingId:', bookingId);
-
-  if (!messageText.trim()) {
-    console.log('⚠️ Empty message');
-    return;
-  }
-
-  if (!socket) {
-    console.error('❌ Socket not initialized');
-    setError('Chat not initialized. Please refresh the page.');
-    return;
-  }
-
-  if (!connected) {
-    console.error('❌ Socket not connected');
-    setError('Not connected to chat server');
-    return;
-  }
-
-  console.log('📤 Sending message:', messageText);
-  console.log('📤 To bookingId:', bookingId);
-  console.log('📤 User:', user.id, user.role);
-
-  // Добавляем сообщение сразу в UI
-  const tempMessage = {
-    senderId: user.id,
-    senderRole: user.role,
-    text: messageText,
-    timestamp: new Date(),
-    _temp: true
   };
-  
-  setMessages(prev => [...prev, tempMessage]);
-
-  // Отправляем на сервер
-  const messageData = {
-    bookingId: bookingId,
-    userId: user.id,
-    userRole: user.role,
-    message: messageText
-  };
-  
-  console.log('📤 Emitting send-message with data:', messageData);
-  socket.emit('send-message', messageData);
-
-  setMessageText('');
-  
-  // Удаляем временное сообщение через 5 секунд
-  setTimeout(() => {
-    setMessages(prev => prev.filter(msg => !msg._temp));
-  }, 5000);
-};
 
   const handleTyping = () => {
     if (socket && connected) {
       socket.emit('user-typing', bookingId);
     }
   };
+
+  const toggleMic = () => {
+    const audioTrack = localStreamRef.current?.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setMicEnabled(audioTrack.enabled);
+    }
+  };
+
+  const toggleCamera = () => {
+    const videoTrack = localStreamRef.current?.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      setCameraEnabled(videoTrack.enabled);
+    }
+  };
+
+  const toggleScreenShare = async () => {
+    try {
+      const peerConnection = peerConnectionRef.current;
+      const videoSender = peerConnection?.getSenders().find((sender) => sender.track?.kind === 'video');
+      const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+
+      if (screenSharing) {
+        await videoSender?.replaceTrack(cameraTrack);
+        screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+        screenStreamRef.current = null;
+        setScreenSharing(false);
+        return;
+      }
+
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const screenTrack = screenStream.getVideoTracks()[0];
+      screenStreamRef.current = screenStream;
+
+      await videoSender?.replaceTrack(screenTrack);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = screenStream;
+      }
+
+      screenTrack.onended = async () => {
+        await videoSender?.replaceTrack(cameraTrack);
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+        }
+        setScreenSharing(false);
+      };
+
+      setScreenSharing(true);
+    } catch (err) {
+      setError('Не удалось включить демонстрацию экрана');
+    }
+  };
+
+  const fileUrl = (url) => {
+    if (!url) return '#';
+    return url.startsWith('http') ? url : `${API_ORIGIN}${url}`;
+  };
+
+  const renderAttachments = (attachments = [], isOwnMessage) => (
+    <div className="mt-2 space-y-2">
+      {attachments.map((file) => (
+        <a
+          key={`${file.url}-${file.originalName}`}
+          href={fileUrl(file.url)}
+          target="_blank"
+          rel="noreferrer"
+          className={`block rounded-md border p-2 text-sm ${
+            isOwnMessage
+              ? 'border-blue-300 bg-blue-500 text-white'
+              : 'border-gray-200 bg-gray-50 text-gray-800'
+          }`}
+        >
+          {file.fileType === 'image' ? (
+            <img
+              src={fileUrl(file.url)}
+              alt={file.originalName}
+              className="mb-2 max-h-48 w-full rounded object-cover"
+            />
+          ) : null}
+          <span className="block break-words font-medium">{file.originalName}</span>
+          <span className={isOwnMessage ? 'text-blue-100' : 'text-gray-500'}>
+            {Math.max(1, Math.round((file.size || 0) / 1024))} KB
+          </span>
+        </a>
+      ))}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -191,71 +412,70 @@ function ChatPage() {
     );
   }
 
-  if (error || !chat) {
+  if (error && !chat) {
     return (
       <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-        {error || 'Failed to load chat'}
+        {error}
       </div>
     );
   }
-  
 
-  const otherUser = user.role === 'student' ? chat.teacherId : chat.studentId;
+  const otherUser = user.role === 'student' ? chat?.teacherId : chat?.studentId;
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      {/* Header */}
       <div className="bg-white border-b p-4 flex items-center justify-between shadow">
         <div>
           <h1 className="text-2xl font-bold">{otherUser?.name || 'Chat'}</h1>
-          <p className="text-sm text-gray-600 flex items-center gap-2">
-            <span className={connected ? 'text-green-600' : 'text-gray-600'}>
-              {connected ? '🟢 Online' : '⚪ Offline'}
-            </span>
+          <p className="text-sm text-gray-600">
+            {connected ? 'Online' : 'Offline'}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={startCall}
+          disabled={!connected || callOpen}
+          className="btn-primary disabled:opacity-50"
+        >
+          Начать звонок
+        </button>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
-            <p>No messages yet. Start the conversation!</p>
+            <p>Сообщений пока нет. Начните переписку.</p>
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`flex ${msg.senderId === user.id ? 'justify-end' : 'justify-start'}`}
-            >
+          messages.map((msg, index) => {
+            const isOwnMessage = msg.senderId === user.id || msg.senderId?._id === user.id;
+            return (
               <div
-                className={`max-w-xs px-4 py-2 rounded-lg ${
-                  msg.senderId === user.id
-                    ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-white border border-gray-300 rounded-bl-none'
-                }`}
+                key={`${msg.timestamp}-${index}`}
+                className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
               >
-                <p className="break-words">{msg.text}</p>
-                <p
-                  className={`text-xs mt-1 ${
-                    msg.senderId === user.id
-                      ? 'text-blue-200'
-                      : 'text-gray-500'
+                <div
+                  className={`max-w-sm px-4 py-2 rounded-lg ${
+                    isOwnMessage
+                      ? 'bg-blue-600 text-white rounded-br-none'
+                      : 'bg-white border border-gray-300 rounded-bl-none'
                   }`}
                 >
-                  {new Date(msg.timestamp).toLocaleTimeString()}
-                </p>
+                  {msg.text ? <p className="break-words">{msg.text}</p> : null}
+                  {renderAttachments(msg.attachments, isOwnMessage)}
+                  <p className={`text-xs mt-1 ${isOwnMessage ? 'text-blue-200' : 'text-gray-500'}`}>
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
 
         {typing && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-300 px-4 py-2 rounded-lg">
-              <p className="text-sm text-gray-600">
-                {otherUser?.name || 'User'} is typing...
-              </p>
+              <p className="text-sm text-gray-600">{otherUser?.name || 'User'} печатает...</p>
             </div>
           </div>
         )}
@@ -263,14 +483,41 @@ function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="bg-white border-t p-4 shadow">
         {error && (
           <div className="bg-red-100 text-red-700 px-3 py-2 rounded mb-3 text-sm">
             {error}
           </div>
         )}
-        <form onSubmit={handleSendMessage} className="flex gap-2">
+
+        {selectedFiles.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {selectedFiles.map((file) => (
+              <div key={file.name} className="flex items-center gap-2 rounded border bg-gray-50 px-3 py-2 text-sm">
+                <span className="max-w-[180px] truncate">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeSelectedFile(file.name)}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  Убрать
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleSendMessage} className="flex flex-col gap-3 md:flex-row">
+          <label className="btn-secondary cursor-pointer text-center">
+            Файл
+            <input
+              type="file"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </label>
           <input
             type="text"
             value={messageText}
@@ -279,17 +526,62 @@ function ChatPage() {
               handleTyping();
             }}
             className="input-field flex-1"
-            placeholder="Type a message..."
+            placeholder="Введите сообщение..."
           />
           <button
             type="submit"
-            disabled={!messageText.trim()}
+            disabled={sending || (!messageText.trim() && selectedFiles.length === 0)}
             className="btn-primary px-6 py-2 disabled:opacity-50"
           >
-            Send
+            {sending ? 'Отправка...' : 'Отправить'}
           </button>
         </form>
       </div>
+
+      {callOpen && (
+        <div className="fixed inset-0 z-50 bg-gray-950/90 p-4 text-white">
+          <div className="mx-auto flex h-full max-w-6xl flex-col">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Звонок с {otherUser?.name || 'собеседником'}</h2>
+                <p className="text-sm text-gray-300">{remoteConnected ? 'Собеседник подключен' : callStatus}</p>
+              </div>
+              <button type="button" onClick={() => cleanupCall(true)} className="btn-danger">
+                Завершить
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-2">
+              <div className="relative overflow-hidden rounded-lg bg-black">
+                <video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" />
+                {!remoteConnected && (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                    Ожидание собеседника
+                  </div>
+                )}
+              </div>
+              <div className="relative overflow-hidden rounded-lg bg-black">
+                <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+                <div className="absolute bottom-3 left-3 rounded bg-black/60 px-2 py-1 text-sm">
+                  {screenSharing ? 'Ваш экран' : 'Вы'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <button type="button" onClick={toggleMic} className="btn-secondary">
+                {micEnabled ? 'Заглушить микрофон' : 'Вкл микрофон'}
+              </button>
+              <button type="button" onClick={toggleCamera} className="btn-secondary">
+                {cameraEnabled ? 'Откл камеру' : 'Показать камеру'}
+              </button>
+              <button type="button" onClick={toggleScreenShare} className="btn-secondary">
+                {screenSharing ? 'Откл демонстрацию' : 'Демонстрировать экран'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -14,3 +14,16 @@ export const getChatMessages = async (bookingId) => {
   const response = await api.get(`/chat/${bookingId}/messages`);
   return response;
 };
+
+export const uploadChatFiles = async (bookingId, files) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files', file));
+
+  const response = await api.post(`/chat/${bookingId}/attachments`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+
+  return response;
+};

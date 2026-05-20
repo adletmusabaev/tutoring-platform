@@ -32,12 +32,13 @@ const setupSocket = (server) => {
     // Send message
     socket.on('send-message', async (data) => {
       try {
-        const { bookingId, userId, userRole, message } = data;
+        const { bookingId, userId, userRole, message, attachments = [] } = data;
+        const text = typeof message === 'string' ? message.trim() : '';
 
         console.log(`💬 Message received from ${userId}:`, message);
         console.log(`Looking for chat with bookingId:`, bookingId);
 
-        if (!message || !message.trim()) {
+        if (!text && attachments.length === 0) {
           console.log('⚠️ Empty message, ignoring');
           return socket.emit('error', { error: 'Empty message' });
         }
@@ -56,7 +57,11 @@ const setupSocket = (server) => {
         chat.messages.push({
           senderId: userId,
           senderRole: userRole,
-          text: message,
+          text,
+          attachments,
+          messageType: attachments.length > 0
+            ? (text ? 'mixed' : 'attachment')
+            : 'text',
           timestamp: new Date()
         });
         chat.updatedAt = new Date();
@@ -68,7 +73,11 @@ const setupSocket = (server) => {
         io.to(bookingId).emit('receive-message', {
           userId,
           userRole,
-          message,
+          message: text,
+          attachments,
+          messageType: attachments.length > 0
+            ? (text ? 'mixed' : 'attachment')
+            : 'text',
           timestamp: new Date()
         });
 
@@ -93,6 +102,31 @@ const setupSocket = (server) => {
       socket.broadcast.to(bookingId).emit('user-stop-typing', {
         socketId: socket.id
       });
+    });
+
+    socket.on('call-offer', (data) => {
+      socket.broadcast.to(data.bookingId).emit('call-offer', {
+        offer: data.offer,
+        from: socket.id
+      });
+    });
+
+    socket.on('call-answer', (data) => {
+      socket.broadcast.to(data.bookingId).emit('call-answer', {
+        answer: data.answer,
+        from: socket.id
+      });
+    });
+
+    socket.on('ice-candidate', (data) => {
+      socket.broadcast.to(data.bookingId).emit('ice-candidate', {
+        candidate: data.candidate,
+        from: socket.id
+      });
+    });
+
+    socket.on('end-call', (bookingId) => {
+      socket.broadcast.to(bookingId).emit('end-call');
     });
 
     // Leave chat

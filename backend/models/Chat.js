@@ -28,7 +28,24 @@ const chatSchema = new mongoose.Schema({
     },
     text: {
       type: String,
-      required: true
+      default: ''
+    },
+    attachments: [{
+      originalName: String,
+      fileName: String,
+      url: String,
+      mimeType: String,
+      size: Number,
+      fileType: {
+        type: String,
+        enum: ['image', 'document'],
+        default: 'document'
+      }
+    }],
+    messageType: {
+      type: String,
+      enum: ['text', 'attachment', 'mixed'],
+      default: 'text'
     },
     timestamp: {
       type: Date,
