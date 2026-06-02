@@ -8,7 +8,10 @@ const {
   deleteUser, 
   getPendingApplications, 
   approveApplication, 
-  rejectApplication 
+  rejectApplication,
+  getTests,
+  createTest,
+  deleteTest
 } = require('../controllers/adminController');
 
 // Middleware to check if user is admin
@@ -41,5 +44,14 @@ router.post('/applications/:id/approve', authenticateToken, requireAdmin, approv
 
 // POST /api/admin/applications/:id/reject - Reject teacher application
 router.post('/applications/:id/reject', authenticateToken, requireAdmin, rejectApplication);
+
+// GET /api/admin/tests - List tests created by admins
+router.get('/tests', authenticateToken, requireAdmin, getTests);
+
+// POST /api/admin/tests - Create a new test
+router.post('/tests', authenticateToken, requireAdmin, createTest);
+
+// DELETE /api/admin/tests/:id - Delete a test
+router.delete('/tests/:id', authenticateToken, requireAdmin, deleteTest);
 
 module.exports = router;

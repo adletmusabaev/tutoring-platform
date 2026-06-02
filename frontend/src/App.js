@@ -120,6 +120,15 @@ function App() {
               />
 
               <Route
+                path="/level-test/custom/:testId"
+                element={
+                  <ProtectedRoute>
+                    <LevelTestPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
                 path="/tests"
                 element={
                   <ProtectedRoute>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import * as gamificationService from '../services/gamificationService';
+import * as testService from '../services/testService';
 import { useAuth } from '../hooks/useAuth';
 
 // Sample test questions
@@ -72,7 +73,7 @@ const TEST_QUESTIONS = {
 };
 
 function LevelTestPage() {
-  const { subject } = useParams();
+  const { subject, testId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, updateUser } = useAuth();
@@ -86,13 +87,38 @@ function LevelTestPage() {
   const [score, setScore] = useState(0);
   const [earnedAchievements, setEarnedAchievements] = useState([]);
   const [earnedPoints, setEarnedPoints] = useState(0);
+  const [customTest, setCustomTest] = useState(null);
+  const [testLoading, setTestLoading] = useState(Boolean(testId));
+  const [testError, setTestError] = useState('');
+
+  useEffect(() => {
+    const loadCustomTest = async () => {
+      if (!testId) return;
+
+      try {
+        setTestLoading(true);
+        const data = await testService.getTestById(testId);
+        setCustomTest(data);
+      } catch (err) {
+        setTestError(err.error || 'Failed to load test');
+      } finally {
+        setTestLoading(false);
+      }
+    };
+
+    loadCustomTest();
+  }, [testId]);
 
   // Get pre-defined questions or generate dynamic ones
-  let questions = TEST_QUESTIONS[subject];
+  const currentSubject = customTest?.subject || subject;
+  const currentTitle = customTest?.title || `Level Test - ${currentSubject}`;
+  const currentLevel = customTest ? customTest.level.charAt(0).toUpperCase() + customTest.level.slice(1) : testLevel;
+
+  let questions = customTest?.questions || TEST_QUESTIONS[currentSubject];
   if (!questions || !questions.length) {
     questions = Array.from({ length: 5 }).map((_, i) => ({
       id: i + 1,
-      question: `This is a sample question ${i + 1} for ${subject} test. What is the correct answer?`,
+      question: `This is a sample question ${i + 1} for ${currentSubject} test. What is the correct answer?`,
       options: ['Option A (Correct)', 'Option B', 'Option C', 'Option D'],
       correctAnswer: 0
     }));
@@ -128,14 +154,14 @@ function LevelTestPage() {
     setScore(percentage);
     
     let maxPoints = 50;
-    if (testLevel === 'Intermediate') maxPoints = 100;
-    if (testLevel === 'Advanced') maxPoints = 150;
+    if (currentLevel === 'Intermediate') maxPoints = 100;
+    if (currentLevel === 'Advanced') maxPoints = 150;
 
     // Award points if score is good enough
     if (percentage >= 50 && user?.role === 'student') {
       try {
         const pointsToAward = percentage >= 80 ? maxPoints : Math.floor(maxPoints / 2);
-        const res = await gamificationService.awardPoints(pointsToAward, 'level_test_passed', subject);
+        const res = await gamificationService.awardPoints(pointsToAward, 'level_test_passed', currentSubject);
         setEarnedPoints(pointsToAward);
         if (res.newAchievements && res.newAchievements.length > 0) {
           setEarnedAchievements(res.newAchievements);
@@ -161,6 +187,26 @@ function LevelTestPage() {
     if (score >= 50) return 'Intermediate';
     return 'Beginner';
   };
+
+  if (testLoading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+      </div>
+    );
+  }
+
+  if (testError) {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-12">
+        <h2 className="text-2xl font-bold text-red-600">Test Unavailable</h2>
+        <p className="text-gray-600 mt-2">{testError}</p>
+        <button onClick={() => navigate('/tests')} className="btn-primary px-6 py-3 mt-6">
+          Back to Tests
+        </button>
+      </div>
+    );
+  }
 
   if (testCompleted) {
     return (
@@ -222,7 +268,7 @@ function LevelTestPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Level Test - {subject} ({testLevel})</h1>
+        <h1 className="text-3xl font-bold mb-2">{currentTitle} ({currentLevel})</h1>
         <p className="text-gray-600">
           Question {currentQuestion + 1} of {questions.length}
         </p>

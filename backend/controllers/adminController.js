@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
 const TeacherApplication = require('../models/TeacherApplication');
+const Test = require('../models/Test');
 const fs = require('fs');
 const path = require('path');
 
@@ -145,11 +146,94 @@ const rejectApplication = async (req, res) => {
   }
 };
 
+const getTests = async (req, res) => {
+  try {
+    const tests = await Test.find()
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 });
+    res.json(tests);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const createTest = async (req, res) => {
+  try {
+    const { title, subject, level, description, questions } = req.body;
+    const normalizedLevel = String(level || '').toLowerCase();
+
+    if (!title || !subject || !normalizedLevel) {
+      return res.status(400).json({ error: 'Title, subject, and level are required' });
+    }
+
+    if (!['beginner', 'intermediate', 'advanced'].includes(normalizedLevel)) {
+      return res.status(400).json({ error: 'Level must be beginner, intermediate, or advanced' });
+    }
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ error: 'Add at least one question' });
+    }
+
+    const normalizedQuestions = questions.map((item, index) => {
+      const options = Array.isArray(item.options)
+        ? item.options.map(option => String(option || '').trim()).filter(Boolean)
+        : [];
+      const correctAnswer = Number(item.correctAnswer);
+
+      if (!String(item.question || '').trim()) {
+        throw new Error(`Question ${index + 1} is missing text`);
+      }
+      if (options.length < 2) {
+        throw new Error(`Question ${index + 1} must have at least two options`);
+      }
+      if (!Number.isInteger(correctAnswer) || correctAnswer < 0 || correctAnswer >= options.length) {
+        throw new Error(`Question ${index + 1} has an invalid correct answer`);
+      }
+
+      return {
+        question: item.question.trim(),
+        options,
+        correctAnswer
+      };
+    });
+
+    const test = await Test.create({
+      title: title.trim(),
+      subject: subject.trim(),
+      level: normalizedLevel,
+      description: description ? description.trim() : '',
+      questions: normalizedQuestions,
+      createdBy: req.user.id
+    });
+
+    res.status(201).json(test);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+const deleteTest = async (req, res) => {
+  try {
+    const test = await Test.findById(req.params.id);
+    if (!test) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    await Test.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Test deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = { 
   getStats, 
   getAllUsers, 
   deleteUser,
   getPendingApplications,
   approveApplication,
-  rejectApplication
+  rejectApplication,
+  getTests,
+  createTest,
+  deleteTest
 };

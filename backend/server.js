@@ -17,6 +17,7 @@ const chatRoutes = require('./routes/chat');
 const paymentRoutes = require('./routes/payments');
 const gamificationRoutes = require('./routes/gamificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const testRoutes = require('./routes/tests');
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +49,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/gamification', gamificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/tests', testRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

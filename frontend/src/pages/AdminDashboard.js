@@ -2,18 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import * as adminService from '../services/adminService';
 
+const LEVEL_OPTIONS = [
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' }
+];
+
+const createEmptyQuestion = () => ({
+  question: '',
+  options: ['', '', '', ''],
+  correctAnswer: 0
+});
+
+const formatLevel = (level) => level ? level.charAt(0).toUpperCase() + level.slice(1) : '';
+
 function AdminDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
   // Tab and modal states
-  const [activeTab, setActiveTab] = useState('users'); // 'users' or 'applications'
+  const [activeTab, setActiveTab] = useState('users');
   const [selectedApp, setSelectedApp] = useState(null);
   const [appActionLoading, setAppActionLoading] = useState(false);
+  const [testActionLoading, setTestActionLoading] = useState(false);
+  const [testForm, setTestForm] = useState({
+    title: '',
+    subject: '',
+    level: 'beginner',
+    description: '',
+    questions: [createEmptyQuestion()]
+  });
 
   useEffect(() => {
     fetchData();
@@ -22,14 +45,16 @@ function AdminDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [statsData, usersData, appsData] = await Promise.all([
+      const [statsData, usersData, appsData, testsData] = await Promise.all([
         adminService.getStats(),
         adminService.getAllUsers(),
-        adminService.getPendingApplications()
+        adminService.getPendingApplications(),
+        adminService.getTests()
       ]);
       setStats(statsData);
       setUsers(usersData);
       setApplications(appsData);
+      setTests(testsData);
     } catch (err) {
       setError('Failed to load admin data');
     } finally {
@@ -72,6 +97,82 @@ function AdminDashboard() {
       alert(err.response?.data?.error || err.error || 'Ошибка при одобрении заявки');
     } finally {
       setAppActionLoading(false);
+    }
+  };
+
+  const updateTestField = (field, value) => {
+    setTestForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateQuestionField = (questionIndex, field, value) => {
+    setTestForm(prev => ({
+      ...prev,
+      questions: prev.questions.map((question, index) => (
+        index === questionIndex ? { ...question, [field]: value } : question
+      ))
+    }));
+  };
+
+  const updateOptionField = (questionIndex, optionIndex, value) => {
+    setTestForm(prev => ({
+      ...prev,
+      questions: prev.questions.map((question, index) => {
+        if (index !== questionIndex) return question;
+
+        return {
+          ...question,
+          options: question.options.map((option, optIndex) => (
+            optIndex === optionIndex ? value : option
+          ))
+        };
+      })
+    }));
+  };
+
+  const addQuestion = () => {
+    setTestForm(prev => ({
+      ...prev,
+      questions: [...prev.questions, createEmptyQuestion()]
+    }));
+  };
+
+  const removeQuestion = (questionIndex) => {
+    setTestForm(prev => ({
+      ...prev,
+      questions: prev.questions.filter((_, index) => index !== questionIndex)
+    }));
+  };
+
+  const handleCreateTest = async (event) => {
+    event.preventDefault();
+
+    try {
+      setTestActionLoading(true);
+      const newTest = await adminService.createTest(testForm);
+      setTests(prev => [newTest, ...prev]);
+      setTestForm({
+        title: '',
+        subject: '',
+        level: 'beginner',
+        description: '',
+        questions: [createEmptyQuestion()]
+      });
+      alert('Test created successfully.');
+    } catch (err) {
+      alert(err.error || 'Failed to create test');
+    } finally {
+      setTestActionLoading(false);
+    }
+  };
+
+  const handleDeleteTest = async (testId) => {
+    if (!window.confirm('Delete this test? Students will no longer see it.')) return;
+
+    try {
+      await adminService.deleteTest(testId);
+      setTests(prev => prev.filter(test => test._id !== testId));
+    } catch (err) {
+      alert(err.error || 'Failed to delete test');
     }
   };
 
@@ -180,6 +281,16 @@ function AdminDashboard() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('tests')}
+          className={`py-3 px-6 font-semibold border-b-2 text-sm transition ${
+            activeTab === 'tests'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-blue-600'
+          }`}
+        >
+          Tests ({tests.length})
+        </button>
       </div>
 
       {/* Users Management Tab */}
@@ -242,6 +353,169 @@ function AdminDashboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tests Management Tab */}
+      {activeTab === 'tests' && (
+        <div className="card bg-white rounded-b-lg shadow-sm border-t-0 p-6 overflow-hidden">
+          <div className="flex flex-col lg:flex-row gap-8">
+            <form onSubmit={handleCreateTest} className="lg:w-1/2 space-y-5">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">Create Test</h2>
+                <p className="text-sm text-gray-500">Set the test title, subject, level, and questions.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2">Test Title</label>
+                  <input
+                    type="text"
+                    value={testForm.title}
+                    onChange={(e) => updateTestField('title', e.target.value)}
+                    className="input-field w-full"
+                    placeholder="Example: Algebra Basics"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2">Subject</label>
+                  <input
+                    type="text"
+                    value={testForm.subject}
+                    onChange={(e) => updateTestField('subject', e.target.value)}
+                    className="input-field w-full"
+                    placeholder="Example: Algebra"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">Level</label>
+                <select
+                  value={testForm.level}
+                  onChange={(e) => updateTestField('level', e.target.value)}
+                  className="input-field w-full"
+                >
+                  {LEVEL_OPTIONS.map(level => (
+                    <option key={level.value} value={level.value}>{level.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">Description</label>
+                <textarea
+                  value={testForm.description}
+                  onChange={(e) => updateTestField('description', e.target.value)}
+                  className="input-field w-full min-h-[90px]"
+                  placeholder="Short description shown in the test directory."
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-gray-800">Questions</h3>
+                  <button
+                    type="button"
+                    onClick={addQuestion}
+                    className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-bold hover:bg-blue-100"
+                  >
+                    Add Question
+                  </button>
+                </div>
+
+                {testForm.questions.map((question, questionIndex) => (
+                  <div key={questionIndex} className="border border-gray-200 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-700">Question {questionIndex + 1}</span>
+                      {testForm.questions.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeQuestion(questionIndex)}
+                          className="text-red-600 text-sm font-bold hover:underline"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+
+                    <input
+                      type="text"
+                      value={question.question}
+                      onChange={(e) => updateQuestionField(questionIndex, 'question', e.target.value)}
+                      className="input-field w-full"
+                      placeholder="Question text"
+                      required
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {question.options.map((option, optionIndex) => (
+                        <label key={optionIndex} className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name={`correct-${questionIndex}`}
+                            checked={question.correctAnswer === optionIndex}
+                            onChange={() => updateQuestionField(questionIndex, 'correctAnswer', optionIndex)}
+                          />
+                          <input
+                            type="text"
+                            value={option}
+                            onChange={(e) => updateOptionField(questionIndex, optionIndex, e.target.value)}
+                            className="input-field w-full"
+                            placeholder={`Option ${optionIndex + 1}`}
+                            required
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="submit"
+                className="btn-primary px-6 py-3 disabled:opacity-50"
+                disabled={testActionLoading}
+              >
+                {testActionLoading ? 'Creating...' : 'Create Test'}
+              </button>
+            </form>
+
+            <div className="lg:w-1/2">
+              <h2 className="text-xl font-bold mb-4 text-gray-800">Existing Tests</h2>
+              {tests.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                  <p className="font-medium">No custom tests yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {tests.map(test => (
+                    <div key={test._id} className="border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-gray-900">{test.title}</h3>
+                          <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-50 text-blue-700">
+                            {formatLevel(test.level)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">{test.subject}</p>
+                        <p className="text-xs text-gray-500 mt-1">{test.questions?.length || 0} questions</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTest(test._id)}
+                        className="text-red-600 hover:text-red-900 font-bold text-sm hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

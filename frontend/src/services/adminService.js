@@ -29,3 +29,18 @@ export const rejectApplication = async (appId) => {
   const response = await api.post(`/admin/applications/${appId}/reject`);
   return response;
 };
+
+export const getTests = async () => {
+  const response = await api.get('/admin/tests');
+  return response;
+};
+
+export const createTest = async (testData) => {
+  const response = await api.post('/admin/tests', testData);
+  return response;
+};
+
+export const deleteTest = async (testId) => {
+  const response = await api.delete(`/admin/tests/${testId}`);
+  return response;
+};

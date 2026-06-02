@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import * as testService from '../services/testService';
 
 // Список всех доступных предметов (можно вынести в общий конфиг позже)
 const SUBJECTS = [
@@ -13,10 +14,32 @@ const SUBJECTS = [
 
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 
+const formatLevel = (level) => level ? level.charAt(0).toUpperCase() + level.slice(1) : '';
+
 function TestsDirectoryPage() {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('All');
+  const [customTests, setCustomTests] = useState([]);
+  const [testsLoading, setTestsLoading] = useState(false);
+
+  useEffect(() => {
+    const loadTests = async () => {
+      if (user?.role !== 'student') return;
+
+      try {
+        setTestsLoading(true);
+        const data = await testService.getTests();
+        setCustomTests(data);
+      } catch (err) {
+        setCustomTests([]);
+      } finally {
+        setTestsLoading(false);
+      }
+    };
+
+    loadTests();
+  }, [user?.role]);
 
   // Генерируем список тестов (каждый предмет имеет 3 уровня)
   const allTests = [];
@@ -24,17 +47,35 @@ function TestsDirectoryPage() {
     LEVELS.forEach(level => {
       allTests.push({
         id: `${subject.toLowerCase()}-${level.toLowerCase()}`,
+        title: `${subject} ${level} Test`,
         subject: subject,
         level: level,
         points: level === 'Advanced' ? 150 : level === 'Intermediate' ? 100 : 50,
-        description: `Test your ${level.toLowerCase()} knowledge in ${subject}.`
+        description: `Test your ${level.toLowerCase()} knowledge in ${subject}.`,
+        href: `/level-test/${subject}${level !== 'Beginner' ? `?level=${level}` : ''}`
       });
+    });
+  });
+
+  customTests.forEach(test => {
+    const level = formatLevel(test.level);
+    allTests.unshift({
+      id: test._id,
+      title: test.title,
+      subject: test.subject,
+      level,
+      points: level === 'Advanced' ? 150 : level === 'Intermediate' ? 100 : 50,
+      description: test.description || `Custom ${level.toLowerCase()} test in ${test.subject}.`,
+      href: `/level-test/custom/${test._id}`,
+      isCustom: true,
+      questionCount: test.questionCount || test.questions?.length || 0
     });
   });
 
   // Фильтрация тестов
   const filteredTests = allTests.filter(test => {
-    const matchesSearch = test.subject.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchable = `${test.title} ${test.subject}`.toLowerCase();
+    const matchesSearch = searchable.includes(searchTerm.toLowerCase());
     const matchesLevel = selectedLevel === 'All' || test.level === selectedLevel;
     return matchesSearch && matchesLevel;
   });
@@ -55,6 +96,10 @@ function TestsDirectoryPage() {
         <h1 className="text-4xl font-bold mb-2">Test Directory</h1>
         <p className="text-lg">Challenge yourself, test your knowledge, and earn points!</p>
       </div>
+
+      {testsLoading && (
+        <div className="text-sm text-gray-500">Loading custom tests...</div>
+      )}
 
       {/* Filters & Search */}
       <div className="card bg-white shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -90,7 +135,10 @@ function TestsDirectoryPage() {
             <div key={test.id} className="card hover:shadow-xl transition-shadow border border-gray-100 flex flex-col h-full">
               <div className="flex-grow">
                 <div className="flex justify-between items-start mb-3">
-                  <h3 className="text-xl font-bold text-gray-900">{test.subject}</h3>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">{test.title}</h3>
+                    <p className="text-xs font-semibold text-gray-500 mt-1">{test.subject}</p>
+                  </div>
                   <span className={`px-2 py-1 text-xs font-bold rounded-full ${
                     test.level === 'Beginner' ? 'bg-green-100 text-green-800' :
                     test.level === 'Intermediate' ? 'bg-yellow-100 text-yellow-800' :
@@ -100,6 +148,11 @@ function TestsDirectoryPage() {
                   </span>
                 </div>
                 <p className="text-gray-600 text-sm mb-4">{test.description}</p>
+                {test.isCustom && (
+                  <p className="text-xs font-semibold text-blue-600 mb-4">
+                    Admin test - {test.questionCount} questions
+                  </p>
+                )}
               </div>
               
               <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
@@ -107,7 +160,7 @@ function TestsDirectoryPage() {
                   Earn up to {test.points} pts
                 </div>
                 <Link
-                  to={`/level-test/${test.subject}${test.level !== 'Beginner' ? `?level=${test.level}` : ''}`}
+                  to={test.href}
                   className="btn-primary py-2 px-4 text-sm"
                 >
                   Start Test
