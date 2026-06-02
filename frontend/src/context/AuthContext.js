@@ -4,15 +4,15 @@ import * as authService from '../services/authService';
 export const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Clear token on mount (no persistence)
   useEffect(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
     setLoading(false);
   }, []);
 
