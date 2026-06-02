@@ -1,5 +1,6 @@
 const Booking = require('../models/Booking');
 const Chat = require('../models/Chat');
+const { createNotification } = require('../services/notificationService');
 
 // Create booking
 const createBooking = async (req, res) => {
@@ -49,6 +50,15 @@ const createBooking = async (req, res) => {
 
     await booking.populate('studentId', 'name email avatar');
     await booking.populate('teacherId', 'name email avatar');
+
+    await createNotification({
+      userId: booking.teacherId._id,
+      type: 'booking_created',
+      title: 'New lesson booking',
+      message: `${booking.studentId.name} booked a ${booking.subject} lesson with you.`,
+      link: '/my-bookings',
+      metadata: { bookingId: booking._id, subject: booking.subject }
+    });
 
     res.status(201).json({
       message: 'Booking created successfully',
@@ -110,6 +120,10 @@ const updateBookingStatus = async (req, res) => {
       { new: true }
     ).populate('studentId', 'name email').populate('teacherId', 'name email');
 
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
     // Create chat if booking is confirmed and chat doesn't exist
     if (status === 'confirmed') {
       try {
@@ -128,6 +142,28 @@ const updateBookingStatus = async (req, res) => {
       }
     }
 
+    if (status === 'confirmed') {
+      await createNotification({
+        userId: booking.studentId._id,
+        type: 'booking_confirmed',
+        title: 'Lesson confirmed',
+        message: `${booking.teacherId.name} approved your ${booking.subject} lesson booking.`,
+        link: '/my-bookings',
+        metadata: { bookingId: booking._id, subject: booking.subject }
+      });
+    }
+
+    if (status === 'cancelled') {
+      await createNotification({
+        userId: booking.studentId._id,
+        type: 'booking_cancelled',
+        title: 'Lesson cancelled',
+        message: `${booking.teacherId.name} declined your ${booking.subject} lesson booking.`,
+        link: '/my-bookings',
+        metadata: { bookingId: booking._id, subject: booking.subject }
+      });
+    }
+
     res.json({
       message: 'Booking updated successfully',
       booking
@@ -144,7 +180,27 @@ const cancelBooking = async (req, res) => {
       req.params.id,
       { status: 'cancelled', updatedAt: Date.now() },
       { new: true }
-    );
+    ).populate('studentId', 'name email').populate('teacherId', 'name email');
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    const recipientId = req.user.role === 'teacher'
+      ? booking.studentId._id
+      : booking.teacherId._id;
+    const actorName = req.user.role === 'teacher'
+      ? booking.teacherId.name
+      : booking.studentId.name;
+
+    await createNotification({
+      userId: recipientId,
+      type: 'booking_cancelled',
+      title: 'Lesson cancelled',
+      message: `${actorName} cancelled the ${booking.subject} lesson booking.`,
+      link: '/my-bookings',
+      metadata: { bookingId: booking._id, subject: booking.subject }
+    });
 
     res.json({
       message: 'Booking cancelled successfully',

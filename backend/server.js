@@ -18,6 +18,7 @@ const paymentRoutes = require('./routes/payments');
 const gamificationRoutes = require('./routes/gamificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const testRoutes = require('./routes/tests');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 const server = http.createServer(app);
@@ -50,6 +51,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/gamification', gamificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tests', testRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { createNotification } = require('../services/notificationService');
 
 // Award points and check achievements
 const awardPoints = async (req, res) => {
@@ -38,6 +39,26 @@ const awardPoints = async (req, res) => {
     }
 
     await user.save();
+
+    await createNotification({
+      userId: user._id,
+      type: 'points_awarded',
+      title: 'Points earned',
+      message: `You earned ${points} points for completing a ${subject || 'level'} test.`,
+      link: '/dashboard',
+      metadata: { points, reason, subject, totalPoints: user.points }
+    });
+
+    for (const achievement of newAchievements) {
+      await createNotification({
+        userId: user._id,
+        type: 'achievement_unlocked',
+        title: 'Achievement unlocked',
+        message: `You unlocked the "${achievement}" achievement.`,
+        link: '/dashboard',
+        metadata: { achievement }
+      });
+    }
 
     res.json({
       message: 'Points updating successful',
