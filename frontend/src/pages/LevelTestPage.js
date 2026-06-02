@@ -1,86 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import * as gamificationService from '../services/gamificationService';
 import * as testService from '../services/testService';
 import { useAuth } from '../hooks/useAuth';
 
-// Sample test questions
-const TEST_QUESTIONS = {
-  JavaScript: [
-    {
-      id: 1,
-      question: 'What does var keyword do?',
-      options: ['Declares variable', 'Creates object', 'Defines function', 'Imports module'],
-      correctAnswer: 0
-    },
-    {
-      id: 2,
-      question: 'What is closure in JavaScript?',
-      options: ['A loop', 'A function with access to outer scope', 'An event', 'A module'],
-      correctAnswer: 1
-    },
-    {
-      id: 3,
-      question: 'What is async/await?',
-      options: ['CSS property', 'HTML attribute', 'Promise handling', 'DOM method'],
-      correctAnswer: 2
-    },
-    {
-      id: 4,
-      question: 'How do you create an arrow function?',
-      options: ['function() {}', '() => {}', 'def() {}', 'func() {}'],
-      correctAnswer: 1
-    },
-    {
-      id: 5,
-      question: 'What is destructuring?',
-      options: ['Breaking code', 'Extracting values from objects/arrays', 'Deleting variables', 'Rebuilding code'],
-      correctAnswer: 1
-    }
-  ],
-  Mathematics: [
-    {
-      id: 1,
-      question: 'What is the derivative of x²?',
-      options: ['x', '2x', 'x³', '1'],
-      correctAnswer: 1
-    },
-    {
-      id: 2,
-      question: 'What is 2 + 2?',
-      options: ['3', '4', '5', '6'],
-      correctAnswer: 1
-    },
-    {
-      id: 3,
-      question: 'What is the square root of 16?',
-      options: ['2', '3', '4', '8'],
-      correctAnswer: 2
-    },
-    {
-      id: 4,
-      question: 'What is π approximately?',
-      options: ['2.14', '3.14', '4.14', '5.14'],
-      correctAnswer: 1
-    },
-    {
-      id: 5,
-      question: 'What is 50% of 100?',
-      options: ['25', '50', '75', '100'],
-      correctAnswer: 1
-    }
-  ]
-};
+const formatLevel = (level) => level ? level.charAt(0).toUpperCase() + level.slice(1) : 'Beginner';
 
 function LevelTestPage() {
   const { subject, testId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const { user, updateUser } = useAuth();
-  
-  const queryParams = new URLSearchParams(location.search);
-  const testLevel = queryParams.get('level') || 'Beginner';
-  
+
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [testCompleted, setTestCompleted] = useState(false);
@@ -109,20 +39,10 @@ function LevelTestPage() {
     loadCustomTest();
   }, [testId]);
 
-  // Get pre-defined questions or generate dynamic ones
   const currentSubject = customTest?.subject || subject;
   const currentTitle = customTest?.title || `Level Test - ${currentSubject}`;
-  const currentLevel = customTest ? customTest.level.charAt(0).toUpperCase() + customTest.level.slice(1) : testLevel;
-
-  let questions = customTest?.questions || TEST_QUESTIONS[currentSubject];
-  if (!questions || !questions.length) {
-    questions = Array.from({ length: 5 }).map((_, i) => ({
-      id: i + 1,
-      question: `This is a sample question ${i + 1} for ${currentSubject} test. What is the correct answer?`,
-      options: ['Option A (Correct)', 'Option B', 'Option C', 'Option D'],
-      correctAnswer: 0
-    }));
-  }
+  const currentLevel = formatLevel(customTest?.level);
+  const questions = customTest?.questions || [];
 
   const handleAnswer = (optionIndex) => {
     const newAnswers = [...answers];
@@ -152,12 +72,11 @@ function LevelTestPage() {
 
     const percentage = Math.round((correctCount / questions.length) * 100);
     setScore(percentage);
-    
+
     let maxPoints = 50;
     if (currentLevel === 'Intermediate') maxPoints = 100;
     if (currentLevel === 'Advanced') maxPoints = 150;
 
-    // Award points if score is good enough
     if (percentage >= 50 && user?.role === 'student') {
       try {
         const pointsToAward = percentage >= 80 ? maxPoints : Math.floor(maxPoints / 2);
@@ -166,19 +85,18 @@ function LevelTestPage() {
         if (res.newAchievements && res.newAchievements.length > 0) {
           setEarnedAchievements(res.newAchievements);
         }
-        // Update user context with new points and achievements
         if (user) {
-          updateUser({ 
-            ...user, 
-            points: res.totalPoints, 
-            achievements: res.allAchievements 
+          updateUser({
+            ...user,
+            points: res.totalPoints,
+            achievements: res.allAchievements
           });
         }
       } catch (err) {
         console.error('Failed to award points', err);
       }
     }
-    
+
     setTestCompleted(true);
   };
 
@@ -196,11 +114,13 @@ function LevelTestPage() {
     );
   }
 
-  if (testError) {
+  if (testError || !questions.length) {
     return (
       <div className="max-w-2xl mx-auto text-center py-12">
         <h2 className="text-2xl font-bold text-red-600">Test Unavailable</h2>
-        <p className="text-gray-600 mt-2">{testError}</p>
+        <p className="text-gray-600 mt-2">
+          {testError || 'This test does not exist. Create tests in the admin panel first.'}
+        </p>
         <button onClick={() => navigate('/tests')} className="btn-primary px-6 py-3 mt-6">
           Back to Tests
         </button>
@@ -213,7 +133,7 @@ function LevelTestPage() {
       <div className="max-w-2xl mx-auto text-center py-12">
         <div className="card space-y-6">
           <div className="text-6xl font-bold text-blue-600">{score}%</div>
-          
+
           <div>
             <h2 className="text-3xl font-bold mb-2">Your Level: {getLevel()}</h2>
             <p className="text-gray-600">
@@ -223,18 +143,16 @@ function LevelTestPage() {
 
           <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 mb-4">
             <p className="text-blue-900">
-              {score >= 70 
-                ? "Great job! You have strong knowledge in this subject." 
-                : score >= 50 
-                ? "Good effort! Keep practicing to improve." 
+              {score >= 70
+                ? 'Great job! You have strong knowledge in this subject.'
+                : score >= 50
+                ? 'Good effort! Keep practicing to improve.'
                 : "Don't worry, you'll improve with practice!"}
             </p>
           </div>
 
-          {/* Gamification Results */}
           {earnedPoints > 0 && (
             <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-6 animate-pulse">
-              <div className="text-4xl mb-2">🏆</div>
               <h3 className="text-2xl font-bold text-yellow-800 mb-2">+{earnedPoints} Points Earned!</h3>
               {earnedAchievements.length > 0 && (
                 <div className="mt-4">
@@ -242,7 +160,7 @@ function LevelTestPage() {
                   <div className="flex flex-wrap gap-2 justify-center">
                     {earnedAchievements.map((ach, idx) => (
                       <span key={idx} className="bg-yellow-400 text-yellow-900 px-4 py-2 rounded-full font-bold text-sm shadow-sm flex items-center gap-2">
-                        🌟 {ach}
+                        {ach}
                       </span>
                     ))}
                   </div>
@@ -281,11 +199,9 @@ function LevelTestPage() {
       </div>
 
       <div className="card space-y-6">
-        {/* Question */}
         <div>
           <h2 className="text-2xl font-semibold mb-4">{question.question}</h2>
 
-          {/* Options */}
           <div className="space-y-3">
             {question.options.map((option, index) => (
               <label
@@ -309,14 +225,13 @@ function LevelTestPage() {
           </div>
         </div>
 
-        {/* Navigation */}
         <div className="flex gap-4 justify-between">
           <button
             onClick={handlePrevious}
             disabled={currentQuestion === 0}
             className="btn-secondary px-6 py-2 disabled:opacity-50"
           >
-            ← Previous
+            Previous
           </button>
 
           <div className="space-x-2">
@@ -334,7 +249,7 @@ function LevelTestPage() {
                 disabled={!isAnswered}
                 className="btn-primary px-6 py-2 disabled:opacity-50"
               >
-                Next →
+                Next
               </button>
             )}
           </div>

@@ -3,15 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import * as testService from '../services/testService';
 
-// Список всех доступных предметов (можно вынести в общий конфиг позже)
-const SUBJECTS = [
-  'Algebra', 'Geometry',
-  'Physics', 'Chemistry', 'Biology',
-  'History', 'Geography', 'Social Studies',
-  'Literature', 'English', 'French', 'Spanish',
-  'Art', 'Music', 'Physical Education'
-];
-
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 
 const formatLevel = (level) => level ? level.charAt(0).toUpperCase() + level.slice(1) : '';
@@ -41,25 +32,10 @@ function TestsDirectoryPage() {
     loadTests();
   }, [user?.role]);
 
-  // Генерируем список тестов (каждый предмет имеет 3 уровня)
-  const allTests = [];
-  SUBJECTS.forEach(subject => {
-    LEVELS.forEach(level => {
-      allTests.push({
-        id: `${subject.toLowerCase()}-${level.toLowerCase()}`,
-        title: `${subject} ${level} Test`,
-        subject: subject,
-        level: level,
-        points: level === 'Advanced' ? 150 : level === 'Intermediate' ? 100 : 50,
-        description: `Test your ${level.toLowerCase()} knowledge in ${subject}.`,
-        href: `/level-test/${subject}${level !== 'Beginner' ? `?level=${level}` : ''}`
-      });
-    });
-  });
-
-  customTests.forEach(test => {
+  const allTests = customTests.map(test => {
     const level = formatLevel(test.level);
-    allTests.unshift({
+
+    return {
       id: test._id,
       title: test.title,
       subject: test.subject,
@@ -69,10 +45,9 @@ function TestsDirectoryPage() {
       href: `/level-test/custom/${test._id}`,
       isCustom: true,
       questionCount: test.questionCount || test.questions?.length || 0
-    });
+    };
   });
 
-  // Фильтрация тестов
   const filteredTests = allTests.filter(test => {
     const searchable = `${test.title} ${test.subject}`.toLowerCase();
     const matchesSearch = searchable.includes(searchTerm.toLowerCase());
@@ -101,12 +76,11 @@ function TestsDirectoryPage() {
         <div className="text-sm text-gray-500">Loading custom tests...</div>
       )}
 
-      {/* Filters & Search */}
       <div className="card bg-white shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="w-full md:w-1/2">
           <input
             type="text"
-            placeholder="Search by subject (e.g., Mathematics, Physics)..."
+            placeholder="Search by title or subject..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="input-field w-full"
@@ -128,7 +102,6 @@ function TestsDirectoryPage() {
         </div>
       </div>
 
-      {/* Test Catalog */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredTests.length > 0 ? (
           filteredTests.map(test => (
@@ -148,13 +121,11 @@ function TestsDirectoryPage() {
                   </span>
                 </div>
                 <p className="text-gray-600 text-sm mb-4">{test.description}</p>
-                {test.isCustom && (
-                  <p className="text-xs font-semibold text-blue-600 mb-4">
-                    Admin test - {test.questionCount} questions
-                  </p>
-                )}
+                <p className="text-xs font-semibold text-blue-600 mb-4">
+                  Admin test - {test.questionCount} questions
+                </p>
               </div>
-              
+
               <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between">
                 <div className="font-semibold text-yellow-600 text-sm">
                   Earn up to {test.points} pts
@@ -170,10 +141,9 @@ function TestsDirectoryPage() {
           ))
         ) : (
           <div className="col-span-full py-12 text-center text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-            <div className="text-4xl mb-3">🔍</div>
-            <p className="text-lg">No tests found matching your criteria.</p>
-            <button 
-              onClick={() => {setSearchTerm(''); setSelectedLevel('All');}}
+            <p className="text-lg">No tests found. Create a test in the admin panel.</p>
+            <button
+              onClick={() => { setSearchTerm(''); setSelectedLevel('All'); }}
               className="mt-3 text-blue-600 hover:underline font-semibold"
             >
               Clear filters
