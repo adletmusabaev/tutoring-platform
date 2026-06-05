@@ -71,6 +71,15 @@ export const login = async (email, password) => {
   return response;
 };
 
+export const adminLogin = async (email, password) => {
+  const hashedPassword = await hashPassword(password);
+  const response = await api.post('/auth/admin-login', {
+    email,
+    password: hashedPassword
+  });
+  return response;
+};
+
 export const logout = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');

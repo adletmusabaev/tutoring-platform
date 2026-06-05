@@ -144,6 +144,11 @@ const login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Block admins from logging in via standard route
+    if (user.role === 'admin') {
+      return res.status(403).json({ error: 'Admins must log in via the admin portal' });
+    }
+
     // Check password
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
@@ -174,4 +179,49 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { register, login };
+// Admin Login
+const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validation
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user || user.role !== 'admin') {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check password
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Create JWT token
+    const token = jwt.sign(
+      { id: user._id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Logged in successfully as Admin',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        city: user.city,
+        avatar: user.avatar
+      },
+      token
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { register, login, adminLogin };

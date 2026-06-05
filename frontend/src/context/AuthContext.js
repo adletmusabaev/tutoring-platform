@@ -58,6 +58,25 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Admin Login
+  const adminLogin = async (email, password) => {
+    try {
+      setError(null);
+      const response = await authService.adminLogin(email, password);
+
+      setToken(response.token);
+      setUser(response.user);
+
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+
+      return response;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
   // Logout
   const logout = () => {
     setUser(null);
@@ -79,6 +98,7 @@ export function AuthProvider({ children }) {
     error,
     register,
     login,
+    adminLogin,
     logout,
     updateUser,
     isAuthenticated: !!token

@@ -22,6 +22,7 @@ import WelcomePage from './pages/WelcomePage';
 import TransactionHistoryPage from './pages/TransactionHistoryPage';
 import AdminDashboard from './pages/AdminDashboard';
 import TestsDirectoryPage from './pages/TestsDirectoryPage';
+import AdminLoginPage from './pages/AdminLoginPage';
 
 function App() {
   return (
@@ -146,10 +147,12 @@ function App() {
                 }
               />
 
+              <Route path="/admin-login" element={<AdminLoginPage />} />
+
               <Route
                 path="/admin"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute adminOnly>
                     <AdminDashboard />
                   </ProtectedRoute>
                 }
