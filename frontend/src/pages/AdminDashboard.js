@@ -77,14 +77,14 @@ function AdminDashboard() {
   };
 
   const handleApproveApp = async (appId) => {
-    if (!window.confirm('Одобрить заявку этого преподавателя? Будет создан аккаунт.')) return;
+    if (!window.confirm('Approve this teacher\'s application? An account will be created.')) return;
     
     try {
       setAppActionLoading(true);
       await adminService.approveApplication(appId);
       setApplications(prev => prev.filter(a => a._id !== appId));
       setSelectedApp(null);
-      alert('Заявка успешно одобрена! Аккаунт преподавателя создан.');
+      alert('Application successfully approved! Teacher account created.');
       
       // Refresh user list and stats
       const [statsData, usersData] = await Promise.all([
@@ -94,7 +94,7 @@ function AdminDashboard() {
       setStats(statsData);
       setUsers(usersData);
     } catch (err) {
-      alert(err.response?.data?.error || err.error || 'Ошибка при одобрении заявки');
+      alert(err.response?.data?.error || err.error || 'Error approving application');
     } finally {
       setAppActionLoading(false);
     }
@@ -177,16 +177,16 @@ function AdminDashboard() {
   };
 
   const handleRejectApp = async (appId) => {
-    if (!window.confirm('Отклонить заявку? Файл сертификата будет удален с сервера.')) return;
+    if (!window.confirm('Reject this application? The certificate file will be deleted from the server.')) return;
     
     try {
       setAppActionLoading(true);
       await adminService.rejectApplication(appId);
       setApplications(prev => prev.filter(a => a._id !== appId));
       setSelectedApp(null);
-      alert('Заявка успешно отклонена.');
+      alert('Application successfully rejected.');
     } catch (err) {
-      alert(err.response?.data?.error || err.error || 'Ошибка при отклонении заявки');
+      alert(err.response?.data?.error || err.error || 'Error rejecting application');
     } finally {
       setAppActionLoading(false);
     }
@@ -213,8 +213,8 @@ function AdminDashboard() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Панель администратора</h1>
-          <p className="text-gray-600">Управление пользователями и модерация заявок преподавателей</p>
+          <h1 className="text-3xl font-bold text-gray-800">Admin Panel</h1>
+          <p className="text-gray-600">User management and teacher application moderation</p>
         </div>
       </div>
       
@@ -229,27 +229,27 @@ function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <div className="card text-center bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
             <div className="text-3xl font-bold text-blue-600">{stats.totalUsers}</div>
-            <div className="text-sm font-semibold text-gray-500 mt-1">Всего пользователей</div>
+            <div className="text-sm font-semibold text-gray-500 mt-1">Total Users</div>
           </div>
           <div className="card text-center bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
             <div className="text-3xl font-bold text-green-600">{stats.studentsCount}</div>
-            <div className="text-sm font-semibold text-gray-500 mt-1">Студенты</div>
+            <div className="text-sm font-semibold text-gray-500 mt-1">Students</div>
           </div>
           <div className="card text-center bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
             <div className="text-3xl font-bold text-purple-600">{stats.teachersCount}</div>
-            <div className="text-sm font-semibold text-gray-500 mt-1">Преподаватели</div>
+            <div className="text-sm font-semibold text-gray-500 mt-1">Teachers</div>
           </div>
           <div className="card text-center bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
             <div className="text-3xl font-bold text-yellow-600">{stats.totalBookings}</div>
-            <div className="text-sm font-semibold text-gray-500 mt-1">Всего занятий</div>
+            <div className="text-sm font-semibold text-gray-500 mt-1">Total Bookings</div>
           </div>
           <div className="card text-center bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
             <div className="text-3xl font-bold text-indigo-600">{stats.completedBookings}</div>
-            <div className="text-sm font-semibold text-gray-500 mt-1">Завершено</div>
+            <div className="text-sm font-semibold text-gray-500 mt-1">Completed</div>
           </div>
           <div className="card text-center bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition">
             <div className="text-3xl font-bold text-emerald-600">${stats.totalRevenue}</div>
-            <div className="text-sm font-semibold text-gray-500 mt-1">Выручка</div>
+            <div className="text-sm font-semibold text-gray-500 mt-1">Revenue</div>
           </div>
         </div>
       )}
@@ -264,7 +264,7 @@ function AdminDashboard() {
               : 'border-transparent text-gray-500 hover:text-blue-600'
           }`}
         >
-          Управление пользователями ({users.length})
+          User Management ({users.length})
         </button>
         <button
           onClick={() => setActiveTab('applications')}
@@ -274,7 +274,7 @@ function AdminDashboard() {
               : 'border-transparent text-gray-500 hover:text-blue-600'
           }`}
         >
-          Заявки преподавателей
+          Teacher Applications
           {applications.length > 0 && (
             <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold animate-pulse">
               {applications.length}
@@ -296,15 +296,15 @@ function AdminDashboard() {
       {/* Users Management Tab */}
       {activeTab === 'users' && (
         <div className="card bg-white rounded-b-lg shadow-sm border-t-0 p-6 overflow-hidden">
-          <h2 className="text-xl font-bold mb-4 text-gray-800">Список пользователей</h2>
+          <h2 className="text-xl font-bold mb-4 text-gray-800">User List</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Пользователь</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Роль</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Дата регистрации</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Действия</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Registration Date</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -345,7 +345,7 @@ function AdminDashboard() {
                           onClick={() => handleDeleteUser(u._id)}
                           className="text-red-600 hover:text-red-900 font-bold hover:underline"
                         >
-                          Удалить
+                          Delete
                         </button>
                       )}
                     </td>
@@ -523,22 +523,22 @@ function AdminDashboard() {
       {/* Applications Management Tab */}
       {activeTab === 'applications' && (
         <div className="card bg-white rounded-b-lg shadow-sm border-t-0 p-6 overflow-hidden">
-          <h2 className="text-xl font-bold mb-4 text-gray-800">Заявки на модерации</h2>
+          <h2 className="text-xl font-bold mb-4 text-gray-800">Applications for Moderation</h2>
           {applications.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <span className="text-4xl">🎉</span>
-              <p className="mt-2 font-medium">Нет активных заявок на модерации</p>
+              <p className="mt-2 font-medium">No active applications for moderation</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Кандидат</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Город</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Предметы</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Ставка</th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Действия</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">City</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Subjects</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rate</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -549,7 +549,7 @@ function AdminDashboard() {
                           <div className="text-sm font-semibold text-gray-900">{app.name}</div>
                           <div className="text-sm text-gray-500">{app.email}</div>
                           <span className="text-xs text-gray-400">
-                            Отправлено: {new Date(app.createdAt).toLocaleDateString()}
+                            Submitted: {new Date(app.createdAt).toLocaleDateString()}
                           </span>
                         </div>
                       </td>
@@ -566,26 +566,26 @@ function AdminDashboard() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
-                        ${app.hourlyRate}/ч
+                        ${app.hourlyRate}/hr
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold space-x-3">
                         <button
                           onClick={() => setSelectedApp(app)}
                           className="text-blue-600 hover:text-blue-900 font-bold hover:underline"
                         >
-                          Смотреть
+                          View
                         </button>
                         <button
                           onClick={() => handleApproveApp(app._id)}
                           className="text-green-600 hover:text-green-900 font-bold hover:underline"
                         >
-                          Одобрить
+                          Approve
                         </button>
                         <button
                           onClick={() => handleRejectApp(app._id)}
                           className="text-red-600 hover:text-red-900 font-bold hover:underline"
                         >
-                          Отклонить
+                          Reject
                         </button>
                       </td>
                     </tr>
@@ -604,8 +604,8 @@ function AdminDashboard() {
             {/* Modal Header */}
             <div className="border-b border-gray-100 px-6 py-4 flex justify-between items-center bg-gray-50 rounded-t-xl">
               <div>
-                <h3 className="text-xl font-bold text-gray-800">Заявка преподавателя</h3>
-                <p className="text-sm text-gray-500">Детальный просмотр и проверка сертификатов</p>
+                <h3 className="text-xl font-bold text-gray-800">Teacher Application</h3>
+                <p className="text-sm text-gray-500">Detailed view and certificate verification</p>
               </div>
               <button
                 onClick={() => setSelectedApp(null)}
@@ -620,33 +620,33 @@ function AdminDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Profile Information */}
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Основная информация</h4>
+                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Basic Information</h4>
                   <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-3">
                     <div>
-                      <span className="text-xs text-gray-400 block">ФИО преподавателя</span>
+                      <span className="text-xs text-gray-400 block">Teacher Full Name</span>
                       <span className="font-semibold text-gray-800 text-base">{selectedApp.name}</span>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-400 block">Email адрес</span>
+                      <span className="text-xs text-gray-400 block">Email Address</span>
                       <span className="text-gray-700">{selectedApp.email}</span>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-400 block">Город проживания</span>
+                      <span className="text-xs text-gray-400 block">City</span>
                       <span className="text-gray-700">{selectedApp.city}</span>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-400 block">Желаемая ставка</span>
-                      <span className="font-bold text-gray-800">${selectedApp.hourlyRate}/час</span>
+                      <span className="text-xs text-gray-400 block">Desired Hourly Rate</span>
+                      <span className="font-bold text-gray-800">${selectedApp.hourlyRate}/hr</span>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-400 block">Дата подачи заявки</span>
+                      <span className="text-xs text-gray-400 block">Submission Date</span>
                       <span className="text-sm text-gray-500">
                         {new Date(selectedApp.createdAt).toLocaleString()}
                       </span>
                     </div>
                   </div>
 
-                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider pt-2">Преподаваемые предметы</h4>
+                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider pt-2">Subjects Taught</h4>
                   <div className="flex flex-wrap gap-2">
                     {selectedApp.subjects.map(sub => (
                       <span key={sub} className="bg-blue-50 text-blue-700 font-bold px-3 py-1 rounded-full border border-blue-100 text-xs">
@@ -658,7 +658,7 @@ function AdminDashboard() {
 
                 {/* Certificate Section */}
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Подтверждающий сертификат</h4>
+                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Supporting Certificate</h4>
                   
                   {selectedApp.certificates && selectedApp.certificates.length > 0 ? (
                     selectedApp.certificates.map((cert, index) => {
@@ -677,7 +677,7 @@ function AdminDashboard() {
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:text-blue-800 text-xs font-bold hover:underline block mt-0.5"
                               >
-                                Открыть в новой вкладке ↗
+                                Open in new tab ↗
                               </a>
                             </div>
                           </div>
@@ -695,15 +695,15 @@ function AdminDashboard() {
                           ) : (
                             <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
                               <span className="text-4xl block mb-2">📄</span>
-                              <p className="text-sm font-semibold text-gray-700">Файл формата PDF</p>
-                              <p className="text-xs text-gray-500 mt-1 mb-4">Предпросмотр PDF недоступен в окне.</p>
+                              <p className="text-sm font-semibold text-gray-700">PDF Format File</p>
+                              <p className="text-xs text-gray-500 mt-1 mb-4">PDF preview is not available in this window.</p>
                               <a
                                 href={fileUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="bg-blue-600 text-white font-semibold text-xs px-4 py-2 rounded shadow hover:bg-blue-700 transition"
                               >
-                                Просмотреть PDF документ
+                                View PDF document
                               </a>
                             </div>
                           )}
@@ -712,7 +712,7 @@ function AdminDashboard() {
                     })
                   ) : (
                     <div className="bg-yellow-50 text-yellow-800 border border-yellow-100 p-4 rounded-lg text-center text-sm">
-                      ⚠️ Сертификат не был загружен.
+                      ⚠️ Certificate was not uploaded.
                     </div>
                   )}
                 </div>
@@ -726,7 +726,7 @@ function AdminDashboard() {
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 font-semibold transition"
                 disabled={appActionLoading}
               >
-                Закрыть
+                Close
               </button>
               
               <div className="space-x-3">
@@ -735,14 +735,14 @@ function AdminDashboard() {
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold transition shadow disabled:opacity-50"
                   disabled={appActionLoading}
                 >
-                  {appActionLoading ? 'Обработка...' : 'Отклонить заявку'}
+                  {appActionLoading ? 'Processing...' : 'Reject Application'}
                 </button>
                 <button
                   onClick={() => handleApproveApp(selectedApp._id)}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold transition shadow disabled:opacity-50"
                   disabled={appActionLoading}
                 >
-                  {appActionLoading ? 'Обработка...' : 'Одобрить и создать аккаунт'}
+                  {appActionLoading ? 'Processing...' : 'Approve & Create Account'}
                 </button>
               </div>
             </div>

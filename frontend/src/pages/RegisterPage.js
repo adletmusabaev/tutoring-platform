@@ -68,7 +68,7 @@ function RegisterPage() {
         return;
       }
       if (!certificateFile) {
-        setError('Пожалуйста, загрузите подтверждающий сертификат');
+        setError('Please upload a supporting certificate');
         return;
       }
     }
@@ -110,17 +110,17 @@ function RegisterPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 text-green-600 text-3xl font-bold">
               ✓
             </div>
-            <h1 className="text-3xl font-bold text-gray-800">Заявка отправлена!</h1>
+            <h1 className="text-3xl font-bold text-gray-800">Application Submitted!</h1>
             <p className="text-gray-600 text-lg leading-relaxed">
-              Ваша заявка на регистрацию в качестве преподавателя успешно отправлена и ожидает модерации администратором. 
-              Мы проверим ваши данные и подтверждающий сертификат в ближайшее время.
+              Your teacher registration application has been successfully submitted and is awaiting administrator moderation.
+              We will verify your data and certificate shortly.
             </p>
             <p className="text-gray-500">
-              Вы сможете войти в свой аккаунт, используя указанный email и пароль, сразу после одобрения вашей заявки.
+              You will be able to log in to your account using the specified email and password immediately after your application is approved.
             </p>
             <div className="pt-4">
               <Link to="/login" className="btn-primary px-6 py-3 font-semibold text-white inline-block rounded shadow hover:bg-blue-700 transition">
-                Вернуться к входу
+                Back to Login
               </Link>
             </div>
           </div>
@@ -280,7 +280,7 @@ function RegisterPage() {
 
                 {/* Certificate Upload */}
                 <div>
-                  <label className="block text-gray-700 font-semibold mb-2">Подтверждающий сертификат (PDF, JPG, PNG)</label>
+                  <label className="block text-gray-700 font-semibold mb-2">Supporting Certificate (PDF, JPG, PNG)</label>
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png"
@@ -289,7 +289,7 @@ function RegisterPage() {
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Пожалуйста, загрузите документ, подтверждающий вашу квалификацию преподавателя. Макс. размер: 5MB.
+                    Please upload a document confirming your teacher qualification. Max size: 5MB.
                   </p>
                 </div>
               </>
@@ -319,7 +319,7 @@ function RegisterPage() {
               disabled={loading}
               className="btn-primary w-full py-3 font-semibold disabled:opacity-50"
             >
-              {loading ? 'Отправка...' : role === 'teacher' ? 'Отправить заявку' : 'Create Account'}
+              {loading ? 'Submitting...' : role === 'teacher' ? 'Submit Application' : 'Create Account'}
             </button>
           </form>
 

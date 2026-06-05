@@ -32,7 +32,7 @@ function ChatPage() {
   const [error, setError] = useState('');
   const [typing, setTyping] = useState(null);
   const [callOpen, setCallOpen] = useState(false);
-  const [callStatus, setCallStatus] = useState('Звонок не начат');
+  const [callStatus, setCallStatus] = useState('Call not started');
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
@@ -97,7 +97,7 @@ function ChatPage() {
       setChat(data);
       setMessages(data.messages || []);
     } catch (err) {
-      setError(err?.error || 'Не удалось загрузить чат');
+      setError(err?.error || 'Failed to load chat');
     } finally {
       setLoading(false);
     }
@@ -135,7 +135,7 @@ function ChatPage() {
 
     setCallOpen(false);
     setIncomingOffer(null);
-    setCallStatus('Звонок завершен');
+    setCallStatus('Call ended');
     setMicEnabled(true);
     setCameraEnabled(true);
     setScreenSharing(false);
@@ -196,7 +196,7 @@ function ChatPage() {
 
     peerConnection.onconnectionstatechange = () => {
       if (peerConnection.connectionState === 'connected') {
-        setCallStatus('Вы в звонке');
+        setCallStatus('In Call');
         setRemoteConnected(true);
       }
 
@@ -224,14 +224,14 @@ function ChatPage() {
       setError('');
       setIncomingOffer(null);
       setCallOpen(true);
-      setCallStatus('Идет вызов...');
+      setCallStatus('Calling...');
       const peerConnection = createPeerConnection();
       await addLocalTracks(peerConnection);
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
       socket.emit('call-offer', { bookingId, offer });
     } catch (err) {
-      setError('Не удалось начать звонок. Проверьте доступ к камере и микрофону.');
+      setError('Failed to start call. Please check camera and microphone permissions.');
       cleanupCall(false);
     }
   };
@@ -240,7 +240,7 @@ function ChatPage() {
     try {
       setError('');
       setCallOpen(true);
-      setCallStatus('Подключение к звонку...');
+      setCallStatus('Connecting to call...');
       const peerConnection = createPeerConnection();
       await addLocalTracks(peerConnection);
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
@@ -249,7 +249,7 @@ function ChatPage() {
       await peerConnection.setLocalDescription(answer);
       socket.emit('call-answer', { bookingId, answer });
     } catch (err) {
-      setError('Не удалось принять звонок. Проверьте доступ к камере и микрофону.');
+      setError('Failed to accept call. Please check camera and microphone permissions.');
       cleanupCall(false);
     }
   }, [addLocalTracks, bookingId, cleanupCall, createPeerConnection, drainPendingIceCandidates, socket]);
@@ -273,7 +273,7 @@ function ChatPage() {
 
     const handleCallOffer = ({ offer }) => {
       setIncomingOffer(offer);
-      setCallStatus('Входящий звонок');
+      setCallStatus('Incoming call');
     };
 
     const handleCallAnswer = async ({ answer }) => {
@@ -283,7 +283,7 @@ function ChatPage() {
 
       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
       await drainPendingIceCandidates();
-      setCallStatus('Вы в звонке');
+      setCallStatus('In Call');
     };
 
     const handleIceCandidate = async ({ candidate }) => {
@@ -306,7 +306,7 @@ function ChatPage() {
     socket.on('call-answer', handleCallAnswer);
     socket.on('ice-candidate', handleIceCandidate);
     socket.on('end-call', () => cleanupCall(false));
-    socket.on('error', (data) => setError(data.error || 'Ошибка соединения'));
+    socket.on('error', (data) => setError(data.error || 'Connection error'));
 
     return () => {
       socket.emit('leave-chat', bookingId);
@@ -355,7 +355,7 @@ function ChatPage() {
     }
 
     if (!socket || !connected) {
-      setError('Нет подключения к серверу чата');
+      setError('Not connected to chat server');
       return;
     }
 
@@ -390,7 +390,7 @@ function ChatPage() {
       setMessageText('');
       setSelectedFiles([]);
     } catch (err) {
-      setError(err?.error || 'Не удалось отправить файл или сообщение');
+      setError(err?.error || 'Failed to send file or message');
     } finally {
       setSending(false);
     }
@@ -425,7 +425,7 @@ function ChatPage() {
       const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
 
       if (!videoSender || !cameraTrack) {
-        setError('Сначала начните звонок с камерой.');
+        setError('Please start a video call first.');
         return;
       }
 
@@ -453,7 +453,7 @@ function ChatPage() {
 
       setScreenSharing(true);
     } catch (err) {
-      setError('Не удалось включить демонстрацию экрана');
+      setError('Failed to share screen');
     }
   };
 
@@ -521,20 +521,20 @@ function ChatPage() {
           disabled={!connected || callOpen}
           className="btn-primary disabled:opacity-50"
         >
-          Начать звонок
+          Start Call
         </button>
       </div>
 
       {incomingOffer && !callOpen && (
         <div className="border-b bg-blue-50 px-4 py-3 text-blue-900">
           <div className="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <span>Входящий звонок от {otherUser?.name || 'собеседника'}</span>
+            <span>Incoming call from {otherUser?.name || 'User'}</span>
             <div className="flex gap-2">
               <button type="button" onClick={acceptIncomingCall} className="btn-primary">
-                Принять
+                Accept
               </button>
               <button type="button" onClick={rejectIncomingCall} className="btn-secondary">
-                Отклонить
+                Decline
               </button>
             </div>
           </div>
@@ -544,7 +544,7 @@ function ChatPage() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
-            <p>Сообщений пока нет. Начните переписку.</p>
+            <p>No messages yet. Start the conversation!</p>
           </div>
         ) : (
           messages.map((msg, index) => {
@@ -575,7 +575,7 @@ function ChatPage() {
         {typing && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-300 px-4 py-2 rounded-lg">
-              <p className="text-sm text-gray-600">{otherUser?.name || 'User'} печатает...</p>
+              <p className="text-sm text-gray-600">{otherUser?.name || 'User'} is typing...</p>
             </div>
           </div>
         )}
@@ -600,7 +600,7 @@ function ChatPage() {
                   onClick={() => removeSelectedFile(file.name)}
                   className="text-red-600 hover:text-red-800"
                 >
-                  Убрать
+                  Remove
                 </button>
               </div>
             ))}
@@ -609,7 +609,7 @@ function ChatPage() {
 
         <form onSubmit={handleSendMessage} className="flex flex-col gap-3 md:flex-row">
           <label className="btn-secondary cursor-pointer text-center">
-            Файл
+            File
             <input
               type="file"
               multiple
@@ -626,14 +626,14 @@ function ChatPage() {
               handleTyping();
             }}
             className="input-field flex-1"
-            placeholder="Введите сообщение..."
+            placeholder="Type a message..."
           />
           <button
             type="submit"
             disabled={sending || (!messageText.trim() && selectedFiles.length === 0)}
             className="btn-primary px-6 py-2 disabled:opacity-50"
           >
-            {sending ? 'Отправка...' : 'Отправить'}
+            {sending ? 'Sending...' : 'Send'}
           </button>
         </form>
       </div>
@@ -643,11 +643,11 @@ function ChatPage() {
           <div className="mx-auto flex h-full max-w-6xl flex-col">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold">Звонок с {otherUser?.name || 'собеседником'}</h2>
-                <p className="text-sm text-gray-300">{remoteConnected ? 'Собеседник подключен' : callStatus}</p>
+                <h2 className="text-xl font-semibold">Call with {otherUser?.name || 'User'}</h2>
+                <p className="text-sm text-gray-300">{remoteConnected ? 'Connected' : callStatus}</p>
               </div>
               <button type="button" onClick={() => cleanupCall(true)} className="btn-danger">
-                Завершить
+                End Call
               </button>
             </div>
 
@@ -656,27 +656,27 @@ function ChatPage() {
                 <video ref={setRemoteVideoElement} autoPlay playsInline className="h-full w-full object-cover" />
                 {!remoteConnected && (
                   <div className="absolute inset-0 flex items-center justify-center text-gray-300">
-                    Ожидание собеседника
+                    Waiting for the other participant...
                   </div>
                 )}
               </div>
               <div className="relative overflow-hidden rounded-lg bg-black">
                 <video ref={setLocalVideoElement} autoPlay muted playsInline className="h-full w-full object-cover" />
                 <div className="absolute bottom-3 left-3 rounded bg-black/60 px-2 py-1 text-sm">
-                  {screenSharing ? 'Ваш экран' : 'Вы'}
+                  {screenSharing ? 'Your Screen' : 'You'}
                 </div>
               </div>
             </div>
 
             <div className="mt-4 flex flex-wrap justify-center gap-3">
               <button type="button" onClick={toggleMic} className="btn-secondary">
-                {micEnabled ? 'Заглушить микрофон' : 'Вкл микрофон'}
+                {micEnabled ? 'Mute Mic' : 'Unmute Mic'}
               </button>
               <button type="button" onClick={toggleCamera} className="btn-secondary">
-                {cameraEnabled ? 'Откл камеру' : 'Показать камеру'}
+                {cameraEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
               </button>
               <button type="button" onClick={toggleScreenShare} className="btn-secondary">
-                {screenSharing ? 'Откл демонстрацию' : 'Демонстрировать экран'}
+                {screenSharing ? 'Stop Presenting' : 'Share Screen'}
               </button>
             </div>
           </div>

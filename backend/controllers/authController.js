@@ -76,7 +76,7 @@ const register = async (req, res) => {
       await application.save();
 
       return res.status(201).json({
-        message: 'Ваша заявка успешно отправлена на модерацию. После одобрения администратором вы сможете войти в свой аккаунт.',
+        message: 'Your application has been successfully submitted for moderation. You will be able to log in to your account once it is approved by an administrator.',
         isPendingTeacher: true
       });
     }
