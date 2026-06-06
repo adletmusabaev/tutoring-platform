@@ -261,8 +261,17 @@ function ChatPage() {
 
     socket.emit('join-chat', bookingId);
 
+    // Message from ANOTHER user arriving in the room
     const handleReceiveMessage = (data) => {
-      setMessages((prev) => [...prev.filter((msg) => !msg._temp), normalizeMessage(data)]);
+      setMessages((prev) => [...prev, normalizeMessage(data)]);
+    };
+
+    // Confirmation that OUR OWN message was saved — replace the optimistic temp entry
+    const handleMessageSent = (data) => {
+      setMessages((prev) => [
+        ...prev.filter((msg) => !msg._temp),
+        normalizeMessage(data)
+      ]);
     };
 
     const handleTypingEvent = (data) => {
@@ -300,6 +309,7 @@ function ChatPage() {
     };
 
     socket.on('receive-message', handleReceiveMessage);
+    socket.on('message-sent', handleMessageSent);
     socket.on('user-typing', handleTypingEvent);
     socket.on('user-stop-typing', () => setTyping(null));
     socket.on('call-offer', handleCallOffer);
@@ -311,6 +321,7 @@ function ChatPage() {
     return () => {
       socket.emit('leave-chat', bookingId);
       socket.off('receive-message', handleReceiveMessage);
+      socket.off('message-sent', handleMessageSent);
       socket.off('user-typing', handleTypingEvent);
       socket.off('user-stop-typing');
       socket.off('call-offer', handleCallOffer);

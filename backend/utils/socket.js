@@ -69,8 +69,21 @@ const setupSocket = (server) => {
 
         console.log(`✅ Message saved to database. Total messages:`, chat.messages.length);
 
-        // Broadcast message to all users in the room
-        io.to(bookingId).emit('receive-message', {
+        // Broadcast message to all OTHER users in the room (not the sender)
+        // The sender already has an optimistic temp message shown in the UI
+        socket.broadcast.to(bookingId).emit('receive-message', {
+          userId,
+          userRole,
+          message: text,
+          attachments,
+          messageType: attachments.length > 0
+            ? (text ? 'mixed' : 'attachment')
+            : 'text',
+          timestamp: new Date()
+        });
+
+        // Confirm to the sender that the message was saved successfully
+        socket.emit('message-sent', {
           userId,
           userRole,
           message: text,
