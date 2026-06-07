@@ -13,7 +13,7 @@ const SUBJECTS = [
   'Art', 'Music', 'Physical Education'
 ];
 
-function ProfilePage() {
+function ProfilePage({ viewedUserId = null, readOnly = false }) {
   const { user, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,12 +39,14 @@ function ProfilePage() {
 
   useEffect(() => {
     fetchProfile();
-  }, [user]);
+  }, [user, viewedUserId]);
 
   const fetchProfile = async () => {
     try {
       console.log('Fetching profile...');
-      const profileData = await userService.getMyProfile();
+      const profileData = viewedUserId
+        ? await userService.getProfileById(viewedUserId)
+        : await userService.getMyProfile();
       setProfile(profileData);
       setFormData({
         name: profileData.name || '',
@@ -60,13 +62,17 @@ function ProfilePage() {
 
       // Fetch reviews based on role
       if (profileData.role === 'teacher' && profileData._id) {
-        fetchReviews(profileData._id);
-        fetchBookings();
+        if (!readOnly) {
+          fetchReviews(profileData._id);
+          fetchBookings();
+        }
       } else if (profileData.role === 'student') {
         // Fetch student stats
         try {
           console.log('Fetching student stats...');
-          const studentStats = await userService.getStudentStats();
+          const studentStats = readOnly
+            ? await fetchViewedStudentStats(profileData._id)
+            : await userService.getStudentStats();
           console.log('Stats fetched:', studentStats);
           setStats(studentStats);
         } catch (e) {
@@ -80,6 +86,37 @@ function ProfilePage() {
       setError('Failed to load profile');
       setLoading(false);
     }
+  };
+
+  const fetchViewedStudentStats = async (studentId) => {
+    const teacherBookings = await bookingService.getMyBookings();
+    const completedBookings = teacherBookings.filter(booking =>
+      booking.studentId?._id === studentId && booking.status === 'completed'
+    );
+
+    let totalMinutes = 0;
+    let totalSpent = 0;
+    const subjectCounts = {};
+
+    completedBookings.forEach(booking => {
+      const start = new Date(booking.startTime);
+      const end = new Date(booking.endTime);
+      const durationMinutes = (end - start) / (1000 * 60);
+
+      totalMinutes += durationMinutes;
+      totalSpent += booking.price || 0;
+      subjectCounts[booking.subject || 'General'] = (subjectCounts[booking.subject || 'General'] || 0) + 1;
+    });
+
+    const topSubject = Object.entries(subjectCounts)
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
+
+    return {
+      totalHours: Math.round((totalMinutes / 60) * 10) / 10,
+      classesCompleted: completedBookings.length,
+      totalSpent: Math.round(totalSpent * 100) / 100,
+      topSubject
+    };
   };
 
   const fetchReviews = async (teacherId) => {
@@ -117,6 +154,8 @@ function ProfilePage() {
   };
 
   const handleChange = (e) => {
+    if (readOnly) return;
+
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -125,6 +164,8 @@ function ProfilePage() {
   };
 
   const handleSubjectToggle = (subject) => {
+    if (readOnly) return;
+
     setFormData(prev => ({
       ...prev,
       subjects: prev.subjects.includes(subject)
@@ -134,6 +175,8 @@ function ProfilePage() {
   };
 
   const handleGoalToggle = (goal) => {
+    if (readOnly) return;
+
     setFormData(prev => ({
       ...prev,
       goals: prev.goals.includes(goal)
@@ -144,6 +187,9 @@ function ProfilePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (readOnly) return;
+
     setError('');
     setSuccess('');
     setSaving(true);
@@ -230,11 +276,15 @@ function ProfilePage() {
 
   const pendingBookings = bookings.filter(b => b.status === 'pending');
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
+  const profileRole = profile?.role || user?.role;
+  const displayedUser = readOnly ? profile : user;
 
   return (
     <div>
-      <h1 className="text-3xl font-bold mb-2">My Profile</h1>
-      <p className="text-gray-600 mb-6">Manage your profile information</p>
+      <h1 className="text-3xl font-bold mb-2">{readOnly ? `${profile?.name || 'Student'} Profile` : 'My Profile'}</h1>
+      <p className="text-gray-600 mb-6">
+        {readOnly ? 'View student profile information' : 'Manage your profile information'}
+      </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
@@ -261,6 +311,7 @@ function ProfilePage() {
                 value={formData.name}
                 onChange={handleChange}
                 className="input-field"
+                disabled={readOnly}
                 required
               />
             </div>
@@ -275,6 +326,7 @@ function ProfilePage() {
                 className="input-field"
                 placeholder="Tell students about yourself..."
                 rows="4"
+                disabled={readOnly}
               />
             </div>
 
@@ -288,6 +340,7 @@ function ProfilePage() {
                 onChange={handleChange}
                 className="input-field"
                 placeholder="https://example.com/avatar.jpg"
+                disabled={readOnly}
               />
               {formData.avatar && (
                 <div className="mt-3">
@@ -302,7 +355,7 @@ function ProfilePage() {
             </div>
 
             {/* Teacher Specific Fields */}
-            {user?.role === 'teacher' && (
+            {profileRole === 'teacher' && (
               <>
                 {/* Subjects */}
                 <div>
@@ -315,6 +368,7 @@ function ProfilePage() {
                           checked={formData.subjects.includes(subject)}
                           onChange={() => handleSubjectToggle(subject)}
                           className="mr-2"
+                          disabled={readOnly}
                         />
                         <span className="text-sm">{subject}</span>
                       </label>
@@ -332,6 +386,7 @@ function ProfilePage() {
                     onChange={handleChange}
                     className="input-field"
                     min="0"
+                    disabled={readOnly}
                   />
                 </div>
 
@@ -346,6 +401,7 @@ function ProfilePage() {
                     className="input-field"
                     min="0"
                     max="70"
+                    disabled={readOnly}
                   />
                 </div>
 
@@ -357,6 +413,7 @@ function ProfilePage() {
                       checked={formData.isOnline}
                       onChange={(e) => setFormData(prev => ({ ...prev, isOnline: e.target.checked }))}
                       className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
+                      disabled={readOnly}
                     />
                     <div>
                       <span className="text-gray-700 font-semibold">Online Status</span>
@@ -386,7 +443,7 @@ function ProfilePage() {
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
                       onChange={handleCertificateUpload}
-                      disabled={uploadingCert}
+                      disabled={uploadingCert || readOnly}
                       className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
                     />
                     <p className="text-xs text-gray-500 mt-1">Upload PDF, JPG, JPEG, or PNG (max 5MB)</p>
@@ -419,6 +476,7 @@ function ProfilePage() {
                             <button
                               onClick={() => handleDeleteCertificate(cert._id)}
                               className="text-red-500 hover:text-red-700 text-sm font-semibold"
+                              disabled={readOnly}
                             >
                               Delete
                             </button>
@@ -432,7 +490,7 @@ function ProfilePage() {
             )}
 
             {/* Student Specific Fields */}
-            {user?.role === 'student' && (
+            {profileRole === 'student' && (
               <>
                 <div>
                   <label className="block text-gray-700 font-semibold mb-3">Learning Goals (Subjects to learn)</label>
@@ -444,6 +502,7 @@ function ProfilePage() {
                           checked={formData.goals.includes(subject)}
                           onChange={() => handleGoalToggle(subject)}
                           className="mr-2"
+                          disabled={readOnly}
                         />
                         <span className="text-sm">{subject}</span>
                       </label>
@@ -458,6 +517,7 @@ function ProfilePage() {
                     value={formData.level}
                     onChange={handleChange}
                     className="input-field"
+                    disabled={readOnly}
                   >
                     <option value="beginner">Beginner</option>
                     <option value="intermediate">Intermediate</option>
@@ -467,18 +527,19 @@ function ProfilePage() {
               </>
             )}
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-primary w-full py-3 font-semibold disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Profile'}
-            </button>
+            {!readOnly && (
+              <button
+                type="submit"
+                disabled={saving}
+                className="btn-primary w-full py-3 font-semibold disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Profile'}
+              </button>
+            )}
           </form>
 
           {/* Reviews Section for Teachers */}
-          {user?.role === 'teacher' && (
+          {profileRole === 'teacher' && !readOnly && (
             <div className="mt-6">
               <h2 className="text-2xl font-bold mb-6">Student Reviews ({reviews.length})</h2>
 
@@ -532,7 +593,7 @@ function ProfilePage() {
           <div className="card sticky top-4">
             <h2 className="text-xl font-bold mb-4">Statistics</h2>
 
-            {user?.role === 'teacher' ? (
+            {profileRole === 'teacher' ? (
               <div className="space-y-4">
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
                   <div className="text-3xl font-bold text-blue-600">{bookings.length}</div>
@@ -581,11 +642,11 @@ function ProfilePage() {
                       <p className="text-sm text-gray-600">Total Spent</p>
                     </div>
                     <div className="text-center p-4 bg-yellow-100 rounded-lg">
-                      <div className="text-3xl font-bold text-yellow-700">{user?.points || 0}</div>
+                      <div className="text-3xl font-bold text-yellow-700">{displayedUser?.points || 0}</div>
                       <p className="text-sm text-gray-600">Points</p>
                     </div>
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-3xl font-bold text-purple-600">{user?.achievements?.length || 0}</div>
+                      <div className="text-3xl font-bold text-purple-600">{displayedUser?.achievements?.length || 0}</div>
                       <p className="text-sm text-gray-600">Achievements</p>
                     </div>
                   </>
@@ -596,11 +657,11 @@ function ProfilePage() {
             )}
 
             {/* Achievements Display for Student */}
-            {user?.role === 'student' && user?.achievements && user.achievements.length > 0 && (
+            {profileRole === 'student' && displayedUser?.achievements && displayedUser.achievements.length > 0 && (
               <div className="mt-8">
                 <h3 className="font-bold text-lg text-gray-800 border-b pb-2 mb-4">My Achievements</h3>
                 <div className="flex flex-wrap gap-2">
-                  {user.achievements.map((ach, idx) => (
+                  {displayedUser.achievements.map((ach, idx) => (
                     <span key={idx} className="bg-purple-100 text-purple-800 border border-purple-200 px-3 py-1.5 rounded-full font-bold text-xs flex items-center gap-1 shadow-sm w-full sm:w-auto">
                       {ach}
                     </span>
@@ -610,7 +671,7 @@ function ProfilePage() {
             )}
             
             {/* Available Tests block for Student */}
-            {user?.role === 'student' && (
+            {profileRole === 'student' && !readOnly && (
               <div className="mt-8 space-y-4">
                  <h3 className="font-bold text-lg text-gray-800 border-b pb-2">Level Tests</h3>
                  <p className="text-sm text-gray-600 mb-4">
