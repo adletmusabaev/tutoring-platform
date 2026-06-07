@@ -29,9 +29,9 @@ function MyBookingsPage() {
   const handleCancel = async (bookingId) => {
     if (window.confirm('Are you sure you want to cancel this booking?')) {
       try {
-        await bookingService.cancelBooking(bookingId);
+        const response = await bookingService.cancelBooking(bookingId);
         setBookings(prev => prev.map(b =>
-          b._id === bookingId ? { ...b, status: 'cancelled' } : b
+          b._id === bookingId ? { ...b, ...response.booking } : b
         ));
       } catch (err) {
         alert('Failed to cancel booking');
@@ -41,9 +41,9 @@ function MyBookingsPage() {
 
   const handleStatusChange = async (bookingId, newStatus) => {
     try {
-      await bookingService.updateBookingStatus(bookingId, newStatus);
+      const response = await bookingService.updateBookingStatus(bookingId, newStatus);
       setBookings(prev => prev.map(b =>
-        b._id === bookingId ? { ...b, status: newStatus } : b
+        b._id === bookingId ? { ...b, ...response.booking } : b
       ));
     } catch (err) {
       alert('Failed to update booking');
@@ -169,7 +169,9 @@ function MyBookingsPage() {
 
                 {booking.status === 'confirmed' && (
                   <Link
-                    to={`/teacher/${user?.role === 'student' ? booking.teacherId?._id : booking.studentId?._id}`}
+                    to={user?.role === 'student'
+                      ? `/teacher/${booking.teacherId?._id}`
+                      : `/student/${booking.studentId?._id}`}
                     className="btn-secondary px-4 py-2 text-sm"
                   >
                     👤 View Profile

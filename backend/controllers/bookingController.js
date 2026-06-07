@@ -1,6 +1,50 @@
 const Booking = require('../models/Booking');
 const Chat = require('../models/Chat');
+const Transaction = require('../models/Transaction');
+const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
 const { createNotification } = require('../services/notificationService');
+
+function paypalClient() {
+  const clientId = process.env.PAYPAL_CLIENT_ID;
+  const clientSecret = process.env.PAYPAL_CLIENT_SECRET;
+
+  const environment = process.env.PAYPAL_MODE === 'live'
+    ? new checkoutNodeJssdk.core.LiveEnvironment(clientId, clientSecret)
+    : new checkoutNodeJssdk.core.SandboxEnvironment(clientId, clientSecret);
+
+  return new checkoutNodeJssdk.core.PayPalHttpClient(environment);
+}
+
+const refundBookingPayment = async (booking) => {
+  if (booking.paymentStatus !== 'paid') {
+    return booking;
+  }
+
+  if (!booking.paypalCaptureId) {
+    throw new Error('Cannot refund this booking because the PayPal capture ID is missing');
+  }
+
+  const transaction = await Transaction.findOne({ bookingId: booking._id });
+  if (transaction?.status === 'refunded' || booking.paymentStatus === 'refunded') {
+    booking.paymentStatus = 'refunded';
+    return booking;
+  }
+
+  const request = new checkoutNodeJssdk.payments.CapturesRefundRequest(booking.paypalCaptureId);
+  request.requestBody({});
+
+  await paypalClient().execute(request);
+
+  booking.paymentStatus = 'refunded';
+  await booking.save();
+
+  if (transaction) {
+    transaction.status = 'refunded';
+    await transaction.save();
+  }
+
+  return booking;
+};
 
 // Create booking
 const createBooking = async (req, res) => {
@@ -114,15 +158,25 @@ const updateBookingStatus = async (req, res) => {
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status, updatedAt: Date.now() },
-      { new: true }
-    ).populate('studentId', 'name email').populate('teacherId', 'name email');
+    const booking = await Booking.findById(req.params.id)
+      .populate('studentId', 'name email')
+      .populate('teacherId', 'name email');
 
     if (!booking) {
       return res.status(404).json({ error: 'Booking not found' });
     }
+
+    if (![booking.studentId._id.toString(), booking.teacherId._id.toString()].includes(req.user.id)) {
+      return res.status(403).json({ error: 'You are not allowed to update this booking' });
+    }
+
+    if (status === 'cancelled' && req.user.role === 'teacher') {
+      await refundBookingPayment(booking);
+    }
+
+    booking.status = status;
+    booking.updatedAt = Date.now();
+    await booking.save();
 
     // Create chat if booking is confirmed and chat doesn't exist
     if (status === 'confirmed') {
@@ -176,15 +230,25 @@ const updateBookingStatus = async (req, res) => {
 // Cancel booking
 const cancelBooking = async (req, res) => {
   try {
-    const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status: 'cancelled', updatedAt: Date.now() },
-      { new: true }
-    ).populate('studentId', 'name email').populate('teacherId', 'name email');
+    const booking = await Booking.findById(req.params.id)
+      .populate('studentId', 'name email')
+      .populate('teacherId', 'name email');
 
     if (!booking) {
       return res.status(404).json({ error: 'Booking not found' });
     }
+
+    if (![booking.studentId._id.toString(), booking.teacherId._id.toString()].includes(req.user.id)) {
+      return res.status(403).json({ error: 'You are not allowed to cancel this booking' });
+    }
+
+    if (req.user.role === 'teacher') {
+      await refundBookingPayment(booking);
+    }
+
+    booking.status = 'cancelled';
+    booking.updatedAt = Date.now();
+    await booking.save();
 
     const recipientId = req.user.role === 'teacher'
       ? booking.studentId._id

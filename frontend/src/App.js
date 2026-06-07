@@ -13,6 +13,7 @@ import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import SearchTeachersPage from './pages/SearchTeachersPage';
 import TeacherProfilePage from './pages/TeacherProfilePage';
+import StudentProfilePage from './pages/StudentProfilePage';
 import BookingPage from './pages/BookingPage';
 import ChatPage from './pages/ChatPage';
 import MyBookingsPage from './pages/MyBookingsPage';
@@ -71,6 +72,15 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <TeacherProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/student/:id"
+                element={
+                  <ProtectedRoute>
+                    <StudentProfilePage />
                   </ProtectedRoute>
                 }
               />

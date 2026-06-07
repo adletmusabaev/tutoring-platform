@@ -159,12 +159,12 @@ function TeacherProfilePage() {
           </div>
         </div>
 
-        {teacher.bio && (
-          <div className="border-t mt-6 pt-6">
-            <h3 className="text-xl font-semibold mb-3">About</h3>
-            <p className="text-gray-700 leading-relaxed">{teacher.bio}</p>
-          </div>
-        )}
+        <div className="border-t mt-6 pt-6">
+          <h3 className="text-xl font-semibold mb-3">Bio</h3>
+          <p className="text-gray-700 leading-relaxed">
+            {teacher.bio || 'This teacher has not added a bio yet.'}
+          </p>
+        </div>
 
         {/* Certificates Section */}
         {teacher.certificates && teacher.certificates.length > 0 && (

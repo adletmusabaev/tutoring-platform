@@ -40,10 +40,10 @@ function TeacherDashboard() {
 
   const handleStatusChange = async (bookingId, newStatus) => {
     try {
-      await bookingService.updateBookingStatus(bookingId, newStatus);
+      const response = await bookingService.updateBookingStatus(bookingId, newStatus);
       setBookings(prev =>
         prev.map(b =>
-          b._id === bookingId ? { ...b, status: newStatus } : b
+          b._id === bookingId ? { ...b, ...response.booking } : b
         )
       );
     } catch (err) {
@@ -145,12 +145,20 @@ function TeacherDashboard() {
                     {new Date(booking.startTime).toLocaleString()} - {booking.subject}
                   </p>
                 </div>
-                <Link
-                  to={`/chat/${booking._id}`}
-                  className="btn-primary px-4 py-2 text-sm"
-                >
-                  Open Chat
-                </Link>
+                <div className="flex gap-2">
+                  <Link
+                    to={`/chat/${booking._id}`}
+                    className="btn-primary px-4 py-2 text-sm"
+                  >
+                    Open Chat
+                  </Link>
+                  <Link
+                    to={`/student/${booking.studentId?._id}`}
+                    className="btn-secondary px-4 py-2 text-sm"
+                  >
+                    View Profile
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
