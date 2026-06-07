@@ -65,14 +65,7 @@ function StudentDashboard() {
           <h3 className="text-xl font-semibold">My Profile</h3>
           <p className="text-gray-600 text-sm">Edit your profile and goals</p>
         </Link>
-        <Link
-          to="/tests"
-          className="card text-center hover:shadow-xl cursor-pointer border border-blue-200 bg-blue-50"
-        >
-          <div className="text-4xl mb-3"></div>
-          <h3 className="text-xl font-semibold text-blue-800">Test Directory</h3>
-          <p className="text-blue-600 text-sm">Find tests, challenge yourself, earn points</p>
-        </Link>
+        
       </div>
 
       {/* Top Rated Teachers */}
