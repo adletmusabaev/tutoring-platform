@@ -2,6 +2,7 @@ const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
 const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const { createNotification } = require('../services/notificationService');
 
 // PayPal Environment Setup
 function paypalClient() {
@@ -156,6 +157,15 @@ const captureOrder = async (req, res) => {
 
         await booking.populate('studentId', 'name email avatar');
         await booking.populate('teacherId', 'name email avatar');
+
+        await createNotification({
+            userId: booking.teacherId._id,
+            type: 'booking_created',
+            title: 'New lesson booking',
+            message: `${booking.studentId.name} booked a ${booking.subject} lesson with you.`,
+            link: '/my-bookings',
+            metadata: { bookingId: booking._id, subject: booking.subject }
+        });
 
         res.status(201).json({
             message: 'Payment successful! Booking created.',
