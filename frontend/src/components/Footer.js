@@ -36,9 +36,9 @@ function Footer() {
           <div>
             <h3 className="text-xl font-bold mb-4">Contact Us</h3>
             <p className="text-gray-300">
-              Email: support@tutoring.com
+              Email: 231513@astanait.edu.kz
               <br />
-              Phone: +1 (555) 123-4567
+              Phone: +7 (705) 431 33 99
             </p>
           </div>
         </div>
@@ -46,8 +46,8 @@ function Footer() {
         <hr className="border-gray-700 my-8" />
 
         <div className="text-center text-gray-300">
-          <p>&copy; 2025 Tutoring Platform. All rights reserved.</p>
-          <p className="mt-2">Team: Myself, Darkhan, Alimkhan</p>
+          <p>&copy; 2026 Tutoring Platform. All rights reserved.</p>
+          <p className="mt-2">Team: Adlet, Darkhan, Alimkhan</p>
         </div>
       </div>
     </footer>
